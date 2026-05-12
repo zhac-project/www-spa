@@ -1,0 +1,579 @@
+// SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Per-device page, four tabs mirroring the legacy UI: Info · States · Bind · Options.
+// TODO: Bind tab currently lists bindings from d.bindings and wires to
+// `device.bind` + `device.bind (unbind:true)`. Options tab is a
+// placeholder for device-specific UI driven by `exposes`.
+import { useEffect, useState } from "preact/hooks";
+import { ui, navigate, showToast, withToast } from "../stores/ui.js";
+import { getDevice, renameDevice, reinterviewDevice, deleteDevice,
+         setDeviceAttr, bindDevice } from "../stores/devices.js";
+import { devices as devicesStore } from "../stores/devices.js";
+import { fmtSince, hex16 } from "../utils.js";
+import { Spinner } from "../components/Spinner.jsx";
+
+const TABS = [
+    { id: "info",     label: "Info"     },
+    { id: "states",   label: "States"   },
+    { id: "commands", label: "Commands" },
+    { id: "bind",     label: "Bind"     },
+    { id: "options",  label: "Options"  },
+];
+
+// Overlay `live` (from the devices-store row for this IEEE) onto the
+// detail snapshot: spread its attrs in, prefer its fresher last_seen/lqi.
+// Returns `detail` unchanged when no live row exists.
+function mergeLiveAttrs(detail, live) {
+    if (!live) return detail;
+    return {
+        ...detail,
+        attrs:     { ...(detail.attrs || {}), ...(live.attrs || {}) },
+        last_seen: live.last_seen ?? detail.last_seen,
+        lqi:       live.lqi       ?? detail.lqi,
+    };
+}
+
+export function DeviceDetailPage() {
+    const ieee = ui.value.currentDeviceIeee;
+    const [tab, setTab] = useState("info");
+    const [detail, setDetail] = useState(null);
+    const [error, setError] = useState(null);
+    const [busy, setBusy]   = useState(false);
+    const [renameVal, setRenameVal] = useState("");
+
+    // Initial + when store updates (attr.changed etc.) refresh in place.
+    // We read from devicesStore as a fast-path fallback while the detail
+    // request resolves.
+    useEffect(() => {
+        if (!ieee) return;
+        setError(null);
+        getDevice(ieee)
+            .then(d => { setDetail(d); setRenameVal(d?.name || ""); })
+            .catch(e => setError(e.message));
+    }, [ieee]);
+
+    // Merge live attr updates from the store into the detail view so
+    // State tab repaints when attr.changed events arrive.
+    const live = devicesStore.value.find(x =>
+        x.ieee && ieee && String(x.ieee).toLowerCase() === String(ieee).toLowerCase());
+    const d = detail ? mergeLiveAttrs(detail, live) : null;
+
+    if (!ieee) return <p class="page">No device selected.</p>;
+
+    async function doRename(override) {
+        const name = ((override != null ? override : renameVal) || "").trim();
+        if (!name) return;
+        setBusy(true);
+        try {
+            await renameDevice(ieee, name);
+            showToast("Renamed", "ok");
+            setDetail({ ...detail, name });
+            setRenameVal(name);
+        }
+        catch (e) {
+            showToast("Rename failed: " + e.message, "err");
+            throw e;
+        }
+        finally { setBusy(false); }
+    }
+    async function doReinterview() {
+        setBusy(true);
+        await withToast(() => reinterviewDevice(ieee), "Re-interview started", "Re-interview failed");
+        setBusy(false);
+    }
+    const [hardRemove, setHardRemove] = useState(false);
+    async function doRemove() {
+        const msg = hardRemove
+            ? `HARD-remove ${ieee}?\n\nAlso wipes the device's NVS entry, shadow attrs, and adapter cache — on rejoin the coordinator runs a fresh interview against the current definition library.`
+            : `Remove ${ieee} from the network?\n\n(Soft — NVS + shadow kept so a rejoin fast-paths back with the last-known state.)`;
+        if (!confirm(msg)) return;
+        setBusy(true);
+        const ok = await withToast(
+            () => deleteDevice(ieee, hardRemove),
+            hardRemove ? "Device hard-removed" : "Device removed",
+            "Remove failed",
+        );
+        setBusy(false);
+        if (ok !== undefined) navigate("devices");
+    }
+
+    if (error) return (
+        <div class="page">
+            <button onClick={() => navigate("devices")}>← Back</button>
+            <p class="error-text">Failed to load: {error}</p>
+        </div>
+    );
+    if (!d) return <div class="page"><Spinner /></div>;
+
+    return (
+        <div class="page">
+            <div class="dev-wrapper">
+                <div class="dev-tabs">
+                    {TABS.map(t => (
+                        <a key={t.id} href="#" class={"tab " + (tab === t.id ? "active" : "")}
+                           onClick={(e) => { e.preventDefault(); setTab(t.id); }}>
+                            {t.label}
+                        </a>
+                    ))}
+                </div>
+                <div class="dev-card">
+                    {tab === "info"     && <InfoTab     d={d} renameVal={renameVal} setRenameVal={setRenameVal} doRename={doRename} />}
+                    {tab === "states"   && <StatesTab   d={d} ieee={ieee} />}
+                    {tab === "commands" && <CommandsTab d={d} ieee={ieee} />}
+                    {tab === "bind"     && <BindTab     d={d} ieee={ieee} />}
+                    {tab === "options"  && <OptionsTab  d={d} ieee={ieee} />}
+
+                    <div class="dev-bottom-bar">
+                        <div class="btn-strip">
+                            <button onClick={() => navigate("devices")}>← Back</button>
+                            <button onClick={doReinterview} disabled={busy}>Re-interview</button>
+                            <label class="hard-toggle"
+                                   title="Hard remove — also wipe NVS, shadow, and adapter caches so rejoin runs a full interview">
+                                <input type="checkbox"
+                                       checked={hardRemove}
+                                       onChange={(e) => setHardRemove(e.currentTarget.checked)} />
+                                <span>hard</span>
+                            </label>
+                            <button class="danger small" onClick={doRemove} disabled={busy}>Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function InfoTab({ d, renameVal, setRenameVal, doRename }) {
+    const eps = d.eps || [];
+    const epClusters = d.clusters || [];
+    return (
+        <div class="tab-panel">
+            <table class="kv-table">
+                <tbody>
+                    <tr><th>Friendly Name</th><td>
+                        <EditableLabel value={d.name || ""} onSave={(v) => {
+                            setRenameVal(v);
+                            return doRename(v);
+                        }} placeholder="—" />
+                    </td></tr>
+                    <tr><th>IEEE</th><td><code class="mono">{d.ieee}</code></td></tr>
+                    <tr><th>NWK</th><td>{hex16(d.nwk)}</td></tr>
+                    <tr><th>Manufacturer</th><td>{d.manufacturer || "—"}</td></tr>
+                    <tr><th>Model</th><td>{d.model || "—"}</td></tr>
+                    <tr><th>Power Source</th><td>{d.power_source || "—"}</td></tr>
+                    <tr><th>LQI</th><td>{d.lqi != null ? d.lqi : "—"}</td></tr>
+                    <tr><th>Last seen</th><td>{fmtSince(d.last_seen)}</td></tr>
+                    <tr><th>Converter</th><td>{d.vendor && d.model ? `${d.vendor}/${d.model}` : "none"}</td></tr>
+                    {eps.map((epId, i) => (
+                        <tr key={epId}>
+                            <th>Endpoint #{epId}</th>
+                            <td><code class="mono">{(epClusters[i] || []).map(hex16).join(" ")}</code></td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// Label-by-default, click the ✏ to switch to an input with ✓ / ✗.
+// Escape cancels, Enter commits. `onSave` returns a Promise — UI
+// stays in edit mode until it resolves so the user sees failures
+// from the server before the label locks back.
+function EditableLabel({ value, onSave, placeholder = "—" }) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft]     = useState(value || "");
+    const [busy, setBusy]       = useState(false);
+    useEffect(() => { if (!editing) setDraft(value || ""); }, [value]);
+
+    async function commit() {
+        const v = (draft || "").trim();
+        if (!v || v === value) { setEditing(false); return; }
+        setBusy(true);
+        try { await onSave(v); setEditing(false); }
+        catch (_) { /* toast shown by caller — stay in edit mode */ }
+        finally { setBusy(false); }
+    }
+    function cancel() { setDraft(value || ""); setEditing(false); }
+
+    if (!editing) {
+        return (
+            <span class="editable-label">
+                <span class="editable-label-text">{value || placeholder}</span>
+                <button class="icon-btn" title="Edit" aria-label="Edit"
+                        onClick={() => setEditing(true)}>✏</button>
+            </span>
+        );
+    }
+    return (
+        <span class="editable-label">
+            <input autoFocus value={draft}
+                   onInput={(e) => setDraft(e.currentTarget.value)}
+                   onKeyDown={(e) => {
+                       if (e.key === "Enter")  commit();
+                       if (e.key === "Escape") cancel();
+                   }}
+                   style="padding:4px 8px;border:1px solid var(--border);border-radius:3px" />
+            <button class="icon-btn ok" title="Save" disabled={busy} onClick={commit}>✓</button>
+            <button class="icon-btn" title="Cancel" disabled={busy} onClick={cancel}>✗</button>
+        </span>
+    );
+}
+
+function StatesTab({ d, ieee }) {
+    const attrs = d.attrs || {};
+    const keys = Object.keys(attrs).sort();
+    // Index exposes by attribute name so each row can look up its
+    // type / access bits / enum values. Server-provided, canonical.
+    const exposeMap = {};
+    for (const e of (d.exposes || [])) {
+        if (e && e.name) exposeMap[e.name] = e;
+    }
+    if (!keys.length) {
+        return <div class="tab-panel"><p class="empty-text">No attributes reported yet.</p></div>;
+    }
+    return (
+        <div class="tab-panel">
+            <table class="data-table dev-states">
+                <thead><tr><th>Attribute</th><th>Value</th><th></th></tr></thead>
+                <tbody>
+                    {keys.map(k => (
+                        <AttrRow key={k} ieee={ieee} k={k} v={attrs[k]}
+                                 expose={exposeMap[k]} />
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// Access bitmask from `exposes[n].access` — z2m convention.
+// Server emits these in `hap_json_encode_device_info` via
+// `zhac_adapter_build_exposes_json` (see components/zhc_adapter).
+const ACCESS_STATE = 0x01;   // publishes / is observable
+const ACCESS_SET   = 0x02;   // writable
+// ACCESS_GET = 0x04 — not consumed in the UI right now.
+
+function isWritable(expose) {
+    // Unknown expose → read-only. Many attrs are published-only by the
+    // converter (e.g. Xiaomi cube's angle / action_angle) and aren't in
+    // the device's exposes list at all; defaulting to editable shows a
+    // meaningless "Set" button that would no-op. Only attrs the server
+    // explicitly marks with the SET bit should show the write control.
+    if (!expose) return false;
+    return (expose.access & ACCESS_SET) !== 0;
+}
+
+function AttrRow({ ieee, k, v, expose }) {
+    const writable = isWritable(expose);
+    const type     = expose?.type || inferType(v);
+    if (!writable) {
+        return (
+            <tr>
+                <td><code class="mono">{k}</code></td>
+                <td>
+                    <span class="ro-val">{formatReadonly(v)}</span>
+                    {expose?.unit && <span class="ro-unit"> {expose.unit}</span>}
+                </td>
+                <td><span class="ro-tag">read-only</span></td>
+            </tr>
+        );
+    }
+    // Writable: dispatch by type.
+    if (type === "binary") {
+        return <AttrBoolRow ieee={ieee} k={k} v={!!v} />;
+    }
+    if (type === "enum" && expose?.values?.length) {
+        return <AttrEnumRow ieee={ieee} k={k} v={v} values={expose.values} />;
+    }
+    return <AttrTextRow ieee={ieee} k={k} v={v}
+                         isNumeric={type === "numeric"} unit={expose?.unit} />;
+}
+
+function inferType(v) {
+    if (typeof v === "boolean") return "binary";
+    if (typeof v === "number")  return "numeric";
+    return "text";
+}
+
+function formatReadonly(v) {
+    if (v == null) return "—";
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (typeof v === "number")  return String(v);
+    return String(v);
+}
+
+function AttrBoolRow({ ieee, k, v }) {
+    const [busy, setBusy] = useState(false);
+    // Optimistic local override. null = follow parent (shadow) value;
+    // non-null = we just toggled and are waiting for the server's
+    // attr.bulk broadcast to confirm. When parent v actually changes
+    // we clear the override so reality wins.
+    const [localV, setLocalV] = useState(null);
+    useEffect(() => { setLocalV(null); }, [v]);
+    const shown = localV !== null ? localV : !!v;
+    async function toggle(e) {
+        const next = e.currentTarget.checked;
+        setLocalV(next);            // flip UI immediately
+        setBusy(true);
+        try { await setDeviceAttr(ieee, k, next); showToast("Set " + k + " = " + next, "ok"); }
+        catch (err) {
+            setLocalV(null);         // revert on failure
+            showToast("Set failed: " + err.message, "err");
+        }
+        finally { setBusy(false); }
+    }
+    return (
+        <tr>
+            <td><code class="mono">{k}</code></td>
+            <td>
+                <label class="toggle">
+                    <input type="checkbox" checked={shown} onChange={toggle} disabled={busy} />
+                    <span class="toggle-slider"></span>
+                </label>
+            </td>
+            <td><span class="ro-tag">{shown ? "on" : "off"}</span></td>
+        </tr>
+    );
+}
+
+function AttrTextRow({ ieee, k, v, isNumeric, unit }) {
+    const [val, setVal] = useState(v ?? "");
+    const [busy, setBusy] = useState(false);
+    useEffect(() => setVal(v ?? ""), [v]);
+    async function save() {
+        setBusy(true);
+        const parsed = isNumeric ? Number(val) : val;
+        try { await setDeviceAttr(ieee, k, parsed); showToast("Set " + k, "ok"); }
+        catch (e) { showToast("Set failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
+    return (
+        <tr>
+            <td><code class="mono">{k}</code></td>
+            <td>
+                <input type={isNumeric ? "number" : "text"}
+                       value={val}
+                       onInput={(e) => setVal(e.currentTarget.value)}
+                       onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+                       style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:160px" />
+                {unit && <span class="ro-unit"> {unit}</span>}
+            </td>
+            <td><button class="small" onClick={save} disabled={busy}>Set</button></td>
+        </tr>
+    );
+}
+
+function AttrEnumRow({ ieee, k, v, values }) {
+    const [busy, setBusy] = useState(false);
+    const [localV, setLocalV] = useState(null);
+    useEffect(() => { setLocalV(null); }, [v]);
+    const shown = localV !== null ? localV : (v == null ? "" : String(v));
+    async function pick(e) {
+        const next = e.currentTarget.value;
+        if (next === shown) return;
+        setLocalV(next);
+        setBusy(true);
+        try { await setDeviceAttr(ieee, k, next); showToast("Set " + k + " = " + next, "ok"); }
+        catch (err) {
+            setLocalV(null);
+            showToast("Set failed: " + err.message, "err");
+        }
+        finally { setBusy(false); }
+    }
+    return (
+        <tr>
+            <td><code class="mono">{k}</code></td>
+            <td>
+                <select value={shown} onChange={pick} disabled={busy}
+                        style="padding:4px 8px;border:1px solid var(--border);border-radius:3px">
+                    {(shown !== "" && !values.includes(shown)) && (
+                        <option value={shown}>{String(shown)}</option>
+                    )}
+                    {values.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+            </td>
+            <td><span class="ro-tag">enum</span></td>
+        </tr>
+    );
+}
+
+// Commands tab — write-only ("fire-and-forget") exposes that the
+// device accepts as Set but never publishes back as State. Typical
+// examples: Tuya IR remotes' `learn_ir_code` / `ir_code_to_send`,
+// scene-controller "press button N" triggers, identify cluster
+// effects. State-bearing writables (state, brightness, …) live on
+// the States tab.
+function CommandsTab({ d, ieee }) {
+    const cmds = (d.exposes || []).filter(e =>
+        e && (e.access & ACCESS_SET) && !(e.access & ACCESS_STATE));
+    if (!cmds.length) {
+        return (
+            <div class="tab-panel">
+                <p class="tab-hint">Write-only commands the device accepts. Sent via <code>device.attr.set</code>.</p>
+                <p class="empty-text">This device exposes no write-only commands.</p>
+            </div>
+        );
+    }
+    return (
+        <div class="tab-panel">
+            <p class="tab-hint">Write-only commands the device accepts. Sent via <code>device.attr.set</code>.</p>
+            <table class="data-table dev-states">
+                <thead><tr><th>Command</th><th>Value</th><th></th></tr></thead>
+                <tbody>
+                    {cmds.map(e => (
+                        <CommandRow key={e.name} ieee={ieee} expose={e} />
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function CommandRow({ ieee, expose }) {
+    const { name, type, unit, values } = expose;
+    const [busy, setBusy] = useState(false);
+    const [val, setVal]   = useState(
+        type === "binary" ? true :
+        type === "enum" && values?.length ? values[0] :
+        type === "numeric" ? 0 : "");
+    async function send(override) {
+        const raw = override !== undefined ? override : val;
+        const parsed = type === "numeric" ? Number(raw)
+                     : type === "binary"  ? !!raw
+                     : raw;
+        setBusy(true);
+        try { await setDeviceAttr(ieee, name, parsed); showToast("Sent " + name, "ok"); }
+        catch (e) { showToast("Send failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
+    if (type === "binary") {
+        return (
+            <tr>
+                <td><code class="mono">{name}</code></td>
+                <td><span class="ro-tag">trigger</span></td>
+                <td>
+                    <button class="small" disabled={busy}
+                            onClick={() => send(true)}>Trigger</button>
+                </td>
+            </tr>
+        );
+    }
+    if (type === "enum" && values?.length) {
+        return (
+            <tr>
+                <td><code class="mono">{name}</code></td>
+                <td>
+                    <select value={val} onChange={(e) => setVal(e.currentTarget.value)} disabled={busy}
+                            style="padding:4px 8px;border:1px solid var(--border);border-radius:3px">
+                        {values.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                </td>
+                <td><button class="small" onClick={() => send()} disabled={busy}>Send</button></td>
+            </tr>
+        );
+    }
+    const isNumeric = type === "numeric";
+    return (
+        <tr>
+            <td><code class="mono">{name}</code></td>
+            <td>
+                {isNumeric ? (
+                    <input type="number" value={val}
+                           onInput={(e) => setVal(e.currentTarget.value)}
+                           onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+                           style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:160px" />
+                ) : (
+                    <textarea value={val}
+                              rows={2}
+                              onInput={(e) => setVal(e.currentTarget.value)}
+                              style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:320px;font-family:inherit;font-size:12px" />
+                )}
+                {unit && <span class="ro-unit"> {unit}</span>}
+            </td>
+            <td><button class="small" onClick={() => send()} disabled={busy}>Send</button></td>
+        </tr>
+    );
+}
+
+function BindTab({ d, ieee }) {
+    const bindings = d.bindings || [];
+    async function unbind(b) {
+        try { await bindDevice({ ieee, unbind: true, src_ep: b.ep, cluster: b.cluster }); showToast("Unbind requested", "ok"); }
+        catch (e) { showToast("Unbind failed: " + e.message, "err"); }
+    }
+    return (
+        <div class="tab-panel">
+            {bindings.length === 0 ? (
+                <p class="empty-text">No bindings installed.</p>
+            ) : (
+                <table class="data-table">
+                    <thead><tr><th>Cluster</th><th>EP</th><th>Dst</th><th></th></tr></thead>
+                    <tbody>
+                        {bindings.map((b, i) => (
+                            <tr key={i}>
+                                <td>{hex16(b.cluster)}</td>
+                                <td>{b.ep}</td>
+                                <td><code class="mono">{b.dst || "—"}</code></td>
+                                <td><button class="danger small" onClick={() => unbind(b)}>Unbind</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+            <BindForm ieee={ieee} />
+        </div>
+    );
+}
+
+function BindForm({ ieee }) {
+    const [ep, setEp] = useState(1);
+    const [cluster, setCluster] = useState("0x0006");
+    async function submit() {
+        try {
+            await bindDevice({ ieee, unbind: false, src_ep: Number(ep), cluster: parseInt(cluster, 16) });
+            showToast("Bind requested", "ok");
+        } catch (e) { showToast("Bind failed: " + e.message, "err"); }
+    }
+    return (
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <h4 style="margin-bottom:8px;font-size:13px">Add binding</h4>
+            <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
+                   style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>
+            <label style="margin-right:10px">Cluster <input value={cluster}
+                   style="width:80px" onInput={(e) => setCluster(e.currentTarget.value)} /></label>
+            <button class="primary small" onClick={submit}>Bind</button>
+        </div>
+    );
+}
+
+function OptionsTab({ d, ieee }) {
+    // Only show exposes explicitly marked `category: "config"` by the
+    // device definition (z2m convention). State-level attributes
+    // (state, brightness, color_*, battery, …) belong on the States
+    // tab; config-level attributes are device-specific settings like
+    // power_on_behavior, motion_debounce, no_motion_timeout, etc.
+    const exposes = (d.exposes || []).filter(e => e && e.category === "config");
+    return (
+        <div class="tab-panel">
+            <p class="tab-hint">Device-specific configuration options.</p>
+            {exposes.length === 0 ? (
+                <p class="empty-text">No configurable options for this device.</p>
+            ) : (
+                <table class="data-table">
+                    <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Values</th></tr></thead>
+                    <tbody>
+                        {exposes.map((e, i) => (
+                            <tr key={i}>
+                                <td><code class="mono">{e.property || e.name}</code></td>
+                                <td>{e.type || "—"}</td>
+                                <td>{e.access != null ? String(e.access) : "—"}</td>
+                                <td>{e.values ? e.values.join(", ") : (e.value_min != null ? `${e.value_min}…${e.value_max ?? "?"}` : "—")}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+}

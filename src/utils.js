@@ -24,9 +24,17 @@ export function fmtBytes(b) {
 }
 
 // Turn a Unix epoch (seconds) into "N ago" / "just now" / "—".
+//
+// Sanity-bound the input: anything before 2020-01-01 (1577836800) is
+// treated as missing. Pre-SNTP firmware paths used to write
+// seconds-since-boot here (uptime), which rendered as ~55 years ago
+// ("494079h ago"). The firmware now gates writes on SNTP being
+// synced; this guard catches any straggler that slips through.
 export function fmtSince(ts) {
     if (ts == null || ts === 0) return "—";
-    const delta = Math.max(0, Math.floor(Date.now() / 1000) - Number(ts));
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n < 1577836800) return "—";
+    const delta = Math.max(0, Math.floor(Date.now() / 1000) - n);
     if (delta < 5) return "just now";
     return fmtUptime(delta) + " ago";
 }

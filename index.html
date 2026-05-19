@@ -7,6 +7,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ZHAC - dual-chip Zigbee Home Automation Controller web UI">
+  <!-- Mobile address-bar tint. Two media-scoped tags so the chrome
+       follows `prefers-color-scheme` along with the rest of the SPA. -->
+  <meta name="theme-color" content="#1a73e8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <!--
+    NOTE: there is intentionally no <meta http-equiv="Content-Security-Policy">
+    here. A meta-tag CSP cannot cover WebSocket (connect-src) connections
+    on Chromium, and this SPA's data path IS the WebSocket - restricting
+    the page via meta would break it without protecting the WS handshake.
+    CSP is emitted by the S3 httpd server as a real response header. See
+    `zhac-net-core` httpd configuration and `www-spa/README.md` for the
+    recommended header value.
+  -->
   <title>ZHAC</title>
 </head>
 <body>

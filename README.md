@@ -60,7 +60,9 @@ www-spa/
 
 ## Protocol
 
-WebSocket only — no REST. Request/reply envelope:
+WebSocket only — no REST (one exception: `POST /api/scripts/:name`
+for Lua-script upload, which exceeds the httpd WS frame cap).
+Request/reply envelope:
 ```
 client → { id, cmd, args }
 server → { id, ok, data }   (success)
@@ -72,6 +74,57 @@ Push events (no `id`): `device.added`, `device.updated`,
 
 See [`docs/WS_API.md`](https://github.com/zhac-project/zhac-platform/src/branch/main/docs/WS_API.md)
 in the platform repo for the full command list.
+
+## Routing
+
+Hash-based, no router library. URLs look like `#/devices`,
+`#/device/<ieee>`, `#/settings`, etc. The `hashchange` listener in
+`stores/ui.js` keeps the `ui.activePage` signal and the URL in sync, so
+back/forward, manual hash edits, and bookmarks all replay the right
+page. `navigate(page, { ieee })` updates `location.hash`; the
+re-entrant hashchange path then commits the signal.
+
+## Environment variables
+
+| Variable        | Used by                       | Purpose                                                   |
+|-----------------|-------------------------------|-----------------------------------------------------------|
+| `ZHAC_LUA_DOC`  | `tools/gen-zhac-completions`  | Absolute path to `LUA_API.md`. Overrides auto-discovery.  |
+
+If `LUA_API.md` cannot be located, the generator emits an empty
+completions module and prints a warning instead of failing the build —
+fresh checkouts without a sibling `zhac-docs/` clone still build.
+
+## Content Security Policy
+
+The SPA does NOT ship a `<meta http-equiv="Content-Security-Policy">`
+because a meta-tag CSP cannot cover WebSocket (`connect-src` for the
+`ws://` / `wss://` data path) on Chromium. CSP MUST be emitted by the S3
+httpd as a response header on `/` and `/assets/*`. Recommended minimum
+(applied in the S3 firmware's `esp_http_server` config):
+
+```
+Content-Security-Policy:
+    default-src 'self';
+    connect-src 'self' ws: wss:;
+    script-src  'self';
+    style-src   'self' 'unsafe-inline';
+    img-src     'self' data:;
+    base-uri    'none';
+    frame-ancestors 'none';
+```
+
+`'unsafe-inline'` is required by CodeMirror 6's inline style injection
+and cannot currently be tightened without forking CM. Everything user-
+authored (rule names, Lua source, log messages) is rendered via JSX text
+nodes — there is no `dangerouslySetInnerHTML` anywhere in `src/`.
+
+## Open-source readiness (deferred)
+
+- Dark theme (`prefers-color-scheme: dark`). The `:root` palette is
+  light-only today; deferred because it requires re-vetting every
+  Badge / Card / log-viewer colour pair against WCAG AA.
+- i18n. All strings are hardcoded English. Deferred — wire-up requires
+  picking an i18n approach and adding extraction tooling.
 
 ## License
 

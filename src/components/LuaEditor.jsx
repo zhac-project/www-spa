@@ -14,6 +14,18 @@ export function LuaEditor({ value, onInput, rows = 16, onSave, onRun }) {
     const latestRef = useRef(value ?? "");
     useEffect(() => { latestRef.current = value ?? ""; }, [value]);
 
+    // Refs for the imperative callbacks so the CM6 keymap always fires
+    // the *current* onSave / onRun — not whichever closure happened to be
+    // alive at editor-mount time. The mount effect runs once on purpose
+    // (rebuilding CM6 on every prop change would flicker + lose history),
+    // so we have to ferry the latest props in through refs.
+    const onSaveRef = useRef(onSave);
+    const onRunRef  = useRef(onRun);
+    const onInputRef = useRef(onInput);
+    useEffect(() => { onSaveRef.current = onSave; },  [onSave]);
+    useEffect(() => { onRunRef.current  = onRun;  },  [onRun]);
+    useEffect(() => { onInputRef.current = onInput; }, [onInput]);
+
     const [ready, setReady] = useState(false);
     const [loadErr, setLoadErr] = useState(null);
 
@@ -49,9 +61,9 @@ export function LuaEditor({ value, onInput, rows = 16, onSave, onRun }) {
 
                 const saveRunKeymap = keymap.of([
                     { key: "Mod-s", preventDefault: true,
-                      run: () => { onSave && onSave(); return true; } },
+                      run: () => { onSaveRef.current && onSaveRef.current(); return true; } },
                     { key: "Mod-Enter", preventDefault: true,
-                      run: () => { onRun && onRun(); return true; } },
+                      run: () => { onRunRef.current  && onRunRef.current();  return true; } },
                 ]);
 
                 const state = EditorState.create({
@@ -74,8 +86,8 @@ export function LuaEditor({ value, onInput, rows = 16, onSave, onRun }) {
                                     ...completionKeymap, indentWithTab]),
                         saveRunKeymap,
                         EditorView.updateListener.of(u => {
-                            if (u.docChanged && onInput) {
-                                onInput(u.state.doc.toString());
+                            if (u.docChanged && onInputRef.current) {
+                                onInputRef.current(u.state.doc.toString());
                             }
                         }),
                     ],

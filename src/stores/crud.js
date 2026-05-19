@@ -14,8 +14,12 @@ import { call, on } from "../ws/client.js";
 //   listKey     — field on the list response that holds the array, e.g. "rules"
 //   idKey       — entity field used to match update/delete events, e.g. "id"
 //
-// Returns `{ sig, bootstrap }` — the signal and a bootstrap function.
-// Subscribes to the three event types as a side effect.
+// Returns `{ sig, bootstrap, teardown }` — the signal, a bootstrap function,
+// and a teardown function that detaches the three event subscribers.
+// Subscribes to the three event types as a side effect; capture the
+// returned unsubscribes so HMR re-execution or test re-imports don't
+// stack duplicate handlers (which would double-append / double-delete
+// on the signal).
 export function createCrudStore({ name, listCmd, listKey, idKey }) {
     const sig = signal([]);
 
@@ -26,21 +30,25 @@ export function createCrudStore({ name, listCmd, listKey, idKey }) {
 
     const sameId = (a, b) => a != null && a[idKey] === b[idKey];
 
-    on(`${name}.added`, (r) => {
-        if (!r || r[idKey] == null) return;
-        if (sig.value.some(x => sameId(x, r))) return;
-        sig.value = [...sig.value, r];
-    });
+    const unsubs = [
+        on(`${name}.added`, (r) => {
+            if (!r || r[idKey] == null) return;
+            if (sig.value.some(x => sameId(x, r))) return;
+            sig.value = [...sig.value, r];
+        }),
+        on(`${name}.updated`, (r) => {
+            if (!r || r[idKey] == null) return;
+            sig.value = sig.value.map(x => sameId(x, r) ? { ...x, ...r } : x);
+        }),
+        on(`${name}.deleted`, (r) => {
+            if (!r || r[idKey] == null) return;
+            sig.value = sig.value.filter(x => !sameId(x, r));
+        }),
+    ];
 
-    on(`${name}.updated`, (r) => {
-        if (!r || r[idKey] == null) return;
-        sig.value = sig.value.map(x => sameId(x, r) ? { ...x, ...r } : x);
-    });
+    function teardown() {
+        for (const u of unsubs) { try { u(); } catch (_) {} }
+    }
 
-    on(`${name}.deleted`, (r) => {
-        if (!r || r[idKey] == null) return;
-        sig.value = sig.value.filter(x => !sameId(x, r));
-    });
-
-    return { sig, bootstrap };
+    return { sig, bootstrap, teardown };
 }

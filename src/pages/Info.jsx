@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Info page — mirrors the legacy two-card layout (S3 + P4) with the same
 // set of rows the vanilla-JS UI presented. Repaints on status.tick push
-// events, plus a 5 s safety-net poll while this page is mounted so the
-// snapshot stays fresh even if push delivery stalls.
+// events from `stores/status.js`. One mount-time refresh seeds the view
+// after a fresh navigation; we used to also poll every 5 s as a
+// "safety net" but that doubled the load on httpd and made the Info-page
+// 11/12 flip race observable. Trust the push stream — `wireBootstrap`
+// already re-fetches `status` on every WS reconnect.
 import { useEffect } from "preact/hooks";
 import { status, bootstrapStatus } from "../stores/status.js";
 import { Card } from "../components/Card.jsx";
@@ -26,13 +29,7 @@ function KV({ rows }) {
 }
 
 export function InfoPage() {
-    useEffect(() => {
-        bootstrapStatus().catch(() => {});
-        const id = setInterval(() => {
-            bootstrapStatus().catch(() => {});
-        }, 5000);
-        return () => clearInterval(id);
-    }, []);
+    useEffect(() => { bootstrapStatus().catch(() => {}); }, []);
 
     const d = status.value || {};
     const p = d.p4 || {};

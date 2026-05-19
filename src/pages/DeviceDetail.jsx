@@ -5,9 +5,9 @@
 // `device.bind` + `device.bind (unbind:true)`. Options tab is a
 // placeholder for device-specific UI driven by `exposes`.
 import { useEffect, useState } from "preact/hooks";
-import { ui, navigate, showToast, withToast } from "../stores/ui.js";
-import { getDevice, renameDevice, reinterviewDevice, deleteDevice,
-         setDeviceAttr, bindDevice } from "../stores/devices.js";
+import { ui, navigate, showToast, withToast, SUCCESS } from "../stores/ui.js";
+import { getDevice, renameDevice, reinterviewDevice, configureDevice,
+         deleteDevice, setDeviceAttr, bindDevice } from "../stores/devices.js";
 import { devices as devicesStore } from "../stores/devices.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
@@ -44,12 +44,27 @@ export function DeviceDetailPage() {
     // Initial + when store updates (attr.changed etc.) refresh in place.
     // We read from devicesStore as a fast-path fallback while the detail
     // request resolves.
+    //
+    // `cancelled` flag pattern: when the user clicks fast between devices
+    // (ieee1 → ieee2) an inflight getDevice(ieee1) can resolve AFTER
+    // ieee2's response and stomp the newer data. The cleanup sets
+    // cancelled=true so the stale .then never calls setDetail. Also
+    // clears `detail` synchronously on change so the old IEEE's UI
+    // doesn't flash during the new request.
     useEffect(() => {
         if (!ieee) return;
+        let cancelled = false;
+        setDetail(null);
         setError(null);
+        setRenameVal("");
         getDevice(ieee)
-            .then(d => { setDetail(d); setRenameVal(d?.name || ""); })
-            .catch(e => setError(e.message));
+            .then(d => {
+                if (cancelled) return;
+                setDetail(d);
+                setRenameVal(d?.name || "");
+            })
+            .catch(e => { if (!cancelled) setError(e.message); });
+        return () => { cancelled = true; };
     }, [ieee]);
 
     // Merge live attr updates from the store into the detail view so
@@ -81,6 +96,16 @@ export function DeviceDetailPage() {
         await withToast(() => reinterviewDevice(ieee), "Re-interview started", "Re-interview failed");
         setBusy(false);
     }
+    // "Configure" re-runs only the bindings + reports + config_steps
+    // pipeline; skips the full ZNP interview. Use after a firmware
+    // update that added new wiring to an existing paired device's def
+    // (e.g. ZG-204Z gained read-on-join for sensitivity / keep_time —
+    // those values populate after one click, no re-pair needed).
+    async function doConfigure() {
+        setBusy(true);
+        await withToast(() => configureDevice(ieee), "Configure re-fired", "Configure failed");
+        setBusy(false);
+    }
     const [hardRemove, setHardRemove] = useState(false);
     async function doRemove() {
         const msg = hardRemove
@@ -94,7 +119,7 @@ export function DeviceDetailPage() {
             "Remove failed",
         );
         setBusy(false);
-        if (ok !== undefined) navigate("devices");
+        if (ok === SUCCESS) navigate("devices");
     }
 
     if (error) return (
@@ -108,9 +133,13 @@ export function DeviceDetailPage() {
     return (
         <div class="page">
             <div class="dev-wrapper">
-                <div class="dev-tabs">
+                <div class="dev-tabs" role="tablist">
                     {TABS.map(t => (
-                        <a key={t.id} href="#" class={"tab " + (tab === t.id ? "active" : "")}
+                        <a key={t.id}
+                           href="javascript:void(0)"
+                           role="tab"
+                           aria-selected={tab === t.id}
+                           class={"tab " + (tab === t.id ? "active" : "")}
                            onClick={(e) => { e.preventDefault(); setTab(t.id); }}>
                             {t.label}
                         </a>
@@ -127,6 +156,11 @@ export function DeviceDetailPage() {
                         <div class="btn-strip">
                             <button onClick={() => navigate("devices")}>← Back</button>
                             <button onClick={doReinterview} disabled={busy}>Re-interview</button>
+                            <button onClick={doConfigure}
+                                    disabled={busy}
+                                    title="Re-run only bindings + reports + config_steps (skip interview). Use after a firmware update adds new wiring to a paired device.">
+                                Configure
+                            </button>
                             <label class="hard-toggle"
                                    title="Hard remove — also wipe NVS, shadow, and adapter caches so rejoin runs a full interview">
                                 <input type="checkbox"
@@ -548,15 +582,25 @@ function BindForm({ ieee }) {
 }
 
 function OptionsTab({ d, ieee }) {
-    // Only show exposes explicitly marked `category: "config"` by the
-    // device definition (z2m convention). State-level attributes
-    // (state, brightness, color_*, battery, …) belong on the States
-    // tab; config-level attributes are device-specific settings like
+    // Reference table of exposes explicitly marked `category: "config"` by
+    // the device definition (z2m convention). State-level attributes
+    // (state, brightness, color_*, battery, …) belong on the States tab;
+    // config-level attributes are device-specific settings like
     // power_on_behavior, motion_debounce, no_motion_timeout, etc.
+    //
+    // This view is intentionally read-only: writable config attrs are
+    // ACCESS_SET-flagged and show up on the States tab with the proper
+    // AttrRow / AttrTextRow controls. Keeping a single write path stops
+    // two tabs from disagreeing about pending writes.
     const exposes = (d.exposes || []).filter(e => e && e.category === "config");
     return (
         <div class="tab-panel">
-            <p class="tab-hint">Device-specific configuration options.</p>
+            <p class="tab-hint">
+                Reference view of this device's configuration exposes
+                (read-only). To change a value, use the matching row on the
+                <strong> States </strong>tab — writable config attributes
+                are exposed there alongside live state.
+            </p>
             {exposes.length === 0 ? (
                 <p class="empty-text">No configurable options for this device.</p>
             ) : (

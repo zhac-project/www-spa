@@ -22,10 +22,18 @@ export function runScript(name, args = {}) { return call("script.run",   { name,
 export async function writeScript(name, src) {
     let token = null;
     try { token = localStorage.getItem("zhac_token"); } catch (_) {}
-    const headers = { "Content-Type": "text/plain;charset=utf-8" };
+    // Cache-Control: no-store guards against a future service-worker
+    // intercept caching a state-mutating POST. Browsers don't cache POST
+    // by default; this is a belt-and-braces declaration for the day a SW
+    // appears. `cache: "no-store"` on the request init covers the fetch
+    // cache layer too.
+    const headers = {
+        "Content-Type":  "text/plain;charset=utf-8",
+        "Cache-Control": "no-store",
+    };
     if (token) headers["X-Api-Key"] = token;
     const r = await fetch(`/api/scripts/${encodeURIComponent(name)}`, {
-        method: "POST", headers, body: src ?? "",
+        method: "POST", headers, body: src ?? "", cache: "no-store",
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     try { return await r.json(); } catch (_) { return { ok: true }; }

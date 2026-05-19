@@ -5,7 +5,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { devices, bootstrapDevices, deleteDevice } from "../stores/devices.js";
 import { call } from "../ws/client.js";
-import { navigate, showToast } from "../stores/ui.js";
+import { navigate, showToast, hrefFor } from "../stores/ui.js";
 import { fmtSince, hex16 } from "../utils.js";
 
 async function confirmRemove(ieee) {
@@ -27,27 +27,35 @@ async function permitJoin(duration) {
     }
 }
 
-// Polls `zigbee.permit_join.status` every second while mounted. The S3
-// tracks the current window locally (the state is authoritative on P4
-// but the S3 knows what it last requested, which is what matters for
-// UI feedback).
+// Polls `zigbee.permit_join.status` while mounted. The S3 tracks the
+// current window locally (the state is authoritative on P4 but the S3
+// knows what it last requested, which is what matters for UI feedback).
+//
+// Self-scheduling setTimeout chain instead of setInterval: a slow httpd
+// round-trip (≥1 s on a loaded ESP-IDF httpd) would otherwise overlap
+// the next interval tick and stack inflight calls. We only schedule the
+// next tick after the current one settles, so cadence becomes "at least
+// N ms between completed calls" rather than "fire every N ms regardless".
 function PermitJoinStatus() {
     const [state, setState] = useState({ open: false, remaining_sec: 0 });
     useEffect(() => {
         let alive = true;
+        let t = null;
         async function tick() {
+            if (!alive) return;
+            let next = { open: false, remaining_sec: 0 };
             try {
                 const d = await call("zigbee.permit_join.status");
-                if (alive) setState(d || { open: false, remaining_sec: 0 });
+                next = d || next;
+                if (alive) setState(next);
             } catch { /* ignore transient errors */ }
+            // Adaptive cadence: 1 s while window is open (countdown UX),
+            // 10 s while closed (idle — no UI to update, just confirm state).
+            if (alive) t = setTimeout(tick, next.open ? 1000 : 10000);
         }
         tick();
-        // Adaptive cadence: 1 s while window is open (countdown UX),
-        // 10 s while closed (idle — no UI to update, just confirm state).
-        const period = state.open ? 1000 : 10000;
-        const id = setInterval(tick, period);
-        return () => { alive = false; clearInterval(id); };
-    }, [state.open]);
+        return () => { alive = false; if (t) clearTimeout(t); };
+    }, []);
     if (state.open) {
         return <span class="pj-status pj-open">Open · {state.remaining_sec}s</span>;
     }
@@ -100,7 +108,13 @@ export function DevicesPage() {
                             <tr key={d.ieee}>
                                 <td class="col-n">{i + 1}</td>
                                 <td>
-                                    <a href="#" onClick={(e) => { e.preventDefault(); navigate("device", { ieee: d.ieee }); }}>
+                                    <a href={hrefFor("device", { ieee: d.ieee })}
+                                       onClick={(e) => {
+                                           if (e.defaultPrevented || e.button !== 0 ||
+                                               e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                                           e.preventDefault();
+                                           navigate("device", { ieee: d.ieee });
+                                       }}>
                                         {d.name || d.ieee}
                                     </a>
                                 </td>

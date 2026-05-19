@@ -4,7 +4,7 @@
 import { useState } from "preact/hooks";
 import { rules, bootstrapRules, createRule, updateRule, enableRule,
          deleteRule as delRuleCall } from "../stores/rules.js";
-import { showToast, withToast } from "../stores/ui.js";
+import { showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { Modal } from "../components/Modal.jsx";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { RuleHelp } from "../components/RuleHelp.jsx";
@@ -46,7 +46,7 @@ export function RulesPage() {
             () => editing.id == null ? createRule(body)
                                       : updateRule({ id: editing.id, ...body }),
             "Rule saved", "Save failed");
-        if (ok !== undefined) close();
+        if (ok === SUCCESS) close();
     }
 
     return (

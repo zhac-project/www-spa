@@ -80,6 +80,16 @@ export async function reinterviewDevice(ieee) {
     return call("device.reinterview", { ieee });
 }
 
+// Re-run ONLY the configure pipeline (bindings + reports + config_steps)
+// without redoing the full interview. Faster than reinterview when the
+// device's (model_id, manufacturer_name) are already cached — e.g. when
+// a definition gained new reports[] / config_steps[] and the user wants
+// an existing paired device to pick them up. Server-side handler in
+// mono-core: `cmd_device_configure` in main/ws_bridge.cpp.
+export async function configureDevice(ieee) {
+    return call("device.configure", { ieee });
+}
+
 export async function deleteDevice(ieee, hard = false) {
     return call("device.delete", { ieee, hard });
 }

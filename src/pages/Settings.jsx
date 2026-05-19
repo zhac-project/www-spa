@@ -5,7 +5,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
 import { status } from "../stores/status.js";
-import { showToast } from "../stores/ui.js";
+import { showToast, navigate } from "../stores/ui.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 
@@ -75,10 +75,10 @@ export function SettingsPage() {
     }
 
     // OTA -----------------------------------------------------------------
-    const [otaS3, setOtaS3] = useState("");
-    const [otaP4, setOtaP4] = useState("");
-    async function doOtaS3() { try { await call("ota.s3", { url: otaS3 }); showToast("S3 OTA started", "ok"); } catch (e) { showToast("Failed: " + e.message, "err"); } }
-    async function doOtaP4() { try { await call("ota.p4", { url: otaP4 }); showToast("P4 OTA started", "ok"); } catch (e) { showToast("Failed: " + e.message, "err"); } }
+    // Inline OTA inputs were removed: they bypassed the URL validation
+    // and confirm() dialog that OtaPage runs, and didn't surface progress
+    // either. Single canonical trigger flow lives in pages/Ota.jsx; this
+    // card just links there.
 
     return (
         <div class="page">
@@ -176,20 +176,18 @@ export function SettingsPage() {
                                checked={!!d.log_mqtt_enabled}
                                onChange={(v) => writeSettings({ log_mqtt_enabled: v })} />
                     {d.auth_enabled && d.api_token && (
-                        <div class="field-hint" style="margin-top:10px">
-                            API token: <code class="mono">{d.api_token}</code>
-                        </div>
+                        <ApiTokenRow token={d.api_token} />
                     )}
                 </Card>
 
                 <Card title="OTA">
-                    <label>S3 firmware URL<input type="url" value={otaS3}
-                                                  onInput={(e) => setOtaS3(e.currentTarget.value)} /></label>
-                    <button class="small" onClick={doOtaS3}>Start S3 OTA</button>
-                    <hr style="margin:12px 0;border:none;border-top:1px solid var(--border)" />
-                    <label>P4 firmware URL<input type="url" value={otaP4}
-                                                  onInput={(e) => setOtaP4(e.currentTarget.value)} /></label>
-                    <button class="small" onClick={doOtaP4}>Start P4 OTA</button>
+                    <p class="muted" style="margin-bottom:8px;font-size:13px">
+                        Firmware updates live on the dedicated OTA page, which
+                        validates the URL, prompts before flashing, and shows
+                        progress for both chips.
+                    </p>
+                    <button class="primary small"
+                            onClick={() => navigate("ota")}>Open OTA page</button>
                 </Card>
             </div>
         </div>
@@ -205,6 +203,33 @@ function ToggleRow({ label, checked, onChange }) {
                 <span class="toggle-slider" />
             </label>
             <span style="font-size:13px">{label}</span>
+        </div>
+    );
+}
+
+// Bearer token is rendered masked by default so a passing glance / a
+// DevTools screenshot doesn't leak it. Reveal is opt-in and per-mount —
+// no signal/store state, so navigating away re-masks. Copy uses the
+// Clipboard API guarded for non-secure contexts (where it throws).
+function ApiTokenRow({ token }) {
+    const [shown, setShown] = useState(false);
+    async function copy() {
+        try {
+            await navigator.clipboard.writeText(token);
+            showToast("Token copied", "ok");
+        } catch (_) {
+            showToast("Clipboard unavailable — reveal + copy manually", "err");
+        }
+    }
+    return (
+        <div class="field-hint" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>API token:</span>
+            <code class="mono">{shown ? token : "•".repeat(12)}</code>
+            <button type="button" class="small"
+                    onClick={() => setShown(v => !v)}>
+                {shown ? "Hide" : "Show"}
+            </button>
+            <button type="button" class="small" onClick={copy}>Copy</button>
         </div>
     );
 }

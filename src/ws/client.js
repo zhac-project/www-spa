@@ -111,7 +111,13 @@ export function on(event, fn) {
 }
 
 // Run fn every time the socket opens (first connect + every reconnect).
+// Returns an unsubscribe fn — symmetric with `on()` so page-level effects
+// can register/teardown cleanly without leaking into `openHandlers`.
 export function onOpen(fn) {
     openHandlers.push(fn);
     if (ws && ws.readyState === WebSocket.OPEN) { try { fn(); } catch (_) {} }
+    return () => {
+        const i = openHandlers.indexOf(fn);
+        if (i >= 0) openHandlers.splice(i, 1);
+    };
 }

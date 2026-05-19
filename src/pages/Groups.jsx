@@ -7,7 +7,7 @@ import { useState } from "preact/hooks";
 import { groups, bootstrapGroups, createGroup, updateGroup,
          deleteGroup as delGroupCall, groupCmd } from "../stores/groups.js";
 import { devices } from "../stores/devices.js";
-import { showToast, withToast } from "../stores/ui.js";
+import { showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { Modal } from "../components/Modal.jsx";
 
 // Minimal cluster/cmd picker parity with the legacy UI.
@@ -28,7 +28,7 @@ export function GroupsPage() {
         const name = (newName || "").trim();
         if (!name) return;
         const ok = await withToast(() => createGroup({ name }), "Group created", "Create failed");
-        if (ok !== undefined) { setCreating(false); setNewName(""); }
+        if (ok === SUCCESS) { setCreating(false); setNewName(""); }
     }
 
     async function removeGroup(g) {

@@ -72,8 +72,8 @@ server → { id, ok: false, err: { code, msg } }   (error)
 Push events (no `id`): `device.added`, `device.updated`,
 `device.removed`, `attr.bulk`, `alert.*`.
 
-See [`docs/WS_API.md`](https://github.com/zhac-project/zhac-platform/src/branch/main/docs/WS_API.md)
-in the platform repo for the full command list.
+See [`WS_API.md`](https://github.com/zhac-project/zhac-docs/blob/main/WS_API.md)
+in the zhac-docs repo for the full command list.
 
 ## Routing
 

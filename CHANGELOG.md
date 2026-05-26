@@ -8,6 +8,13 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Added
+
+- **Device → Options tab**: per-device "Report throttle (ms)" field — a number
+  input + Save that POSTs `device.options.set {ieee, throttle_ms}`. Caps the
+  update flood from chatty Tuya-DP sensors (air-quality monitors). Presentation
+  only — the throttle is enforced firmware-side (device_shadow). (#84)
+
 ### Fixed (Critical)
 
 - **C-1** `onOpen` now returns an unsubscribe function symmetric with

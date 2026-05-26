@@ -103,6 +103,56 @@ export function hrefFor(page, params = {}) {
     return buildHash(page, params.ieee ?? null);
 }
 
+// ── Theme (light / dark / system) ────────────────────────────────────────
+// Persisted in localStorage under key "theme". Three modes:
+//   "system" — follow OS prefers-color-scheme (default for fresh installs)
+//   "light"  — force light
+//   "dark"   — force dark
+// Applied by mutating <html data-theme="..."> which the CSS switches on.
+// An inline script in index.html applies the saved choice BEFORE CSS
+// loads so there's no light-on-dark flash on a dark-mode browser.
+
+const THEME_KEY = "theme";
+
+function readSavedTheme() {
+    try {
+        const v = localStorage.getItem(THEME_KEY);
+        return v === "light" || v === "dark" || v === "system" ? v : "system";
+    } catch { return "system"; }
+}
+
+export const themeMode = signal(readSavedTheme());
+
+function resolveEffectiveTheme(mode) {
+    if (mode === "light" || mode === "dark") return mode;
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme() {
+    const effective = resolveEffectiveTheme(themeMode.value);
+    document.documentElement.dataset.theme = effective;
+}
+
+export function setTheme(mode) {
+    const v = (mode === "light" || mode === "dark" || mode === "system") ? mode : "system";
+    try { localStorage.setItem(THEME_KEY, v); } catch {}
+    themeMode.value = v;
+}
+
+// React to runtime theme changes (user picks a new mode).
+themeMode.subscribe(applyTheme);
+
+// React to OS-level pref changes (only meaningful when mode === "system").
+try {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (themeMode.value === "system") applyTheme();
+    });
+} catch {
+    // older Safari may not support addEventListener on MediaQueryList — fall
+    // back gracefully. The effective theme is still applied at boot via the
+    // inline script + the subscribe() call above.
+}
+
 export function showToast(msg, type = "ok") {
     ui.value = { ...ui.value, toast: { msg, type, ts: Date.now() } };
 }

@@ -97,89 +97,91 @@
     --spinner-track: #cccccc;
 }
 
-/* ── Dark mode (prefers-color-scheme: dark) ──────────────────────────
- * Auto-applies when the OS / browser reports dark preference. No toggle
- * UI — browser preference is the only driver. All text/background pairs
- * are WCAG AA (≥ 4.5:1) for normal text, ≥ 3:1 for large/UI text.
- * ──────────────────────────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --blue:      #4c9aff;       /* lifted hue, 6.8:1 on --bg */
-        --blue-dark: #1a73e8;       /* hover stays close to brand */
-        --bg:        #0f1115;
-        --bg-alt:    #161a21;
-        --card-bg:   #161a21;
-        --border:    #262b34;
-        --text:      #e6e8eb;       /* 14.6:1 on --bg */
-        --muted:     #9ba3ad;       /* 6.0:1 on --bg, 5.1:1 on --card-bg */
-        --success:   #4ade80;       /* 8.2:1 on --bg */
-        --warn:      #fbbf24;       /* 9.4:1 on --bg */
-        --danger:    #f87171;       /* 5.7:1 on --bg */
-        --danger-strong: #ef4444;
-        --log-bg:    #0b0d11;
-        --log-text:  #d4d4d4;
-        --row-a:     #1a1f27;
-        --row-b:     #1e242d;
+/* ── Dark mode ───────────────────────────────────────────────────────
+ * Applied via `<html data-theme="dark">` attribute set by:
+ *   - the inline FOUC-prevention script in index.html (boot)
+ *   - the `themeMode` signal in src/stores/ui.js (runtime user choice)
+ * Both follow the localStorage "theme" key:
+ *   "system" → mirror OS prefers-color-scheme (mirrored to data-theme by JS)
+ *   "light"  → forced light, ignore OS
+ *   "dark"   → forced dark, ignore OS
+ * The Settings page exposes the chooser. */
+:root[data-theme="dark"] {
+    --blue:      #4c9aff;       /* lifted hue, 6.8:1 on --bg */
+    --blue-dark: #1a73e8;       /* hover stays close to brand */
+    --bg:        #0f1115;
+    --bg-alt:    #161a21;
+    --card-bg:   #161a21;
+    --border:    #262b34;
+    --text:      #e6e8eb;       /* 14.6:1 on --bg */
+    --muted:     #9ba3ad;       /* 6.0:1 on --bg, 5.1:1 on --card-bg */
+    --success:   #4ade80;       /* 8.2:1 on --bg */
+    --warn:      #fbbf24;       /* 9.4:1 on --bg */
+    --danger:    #f87171;       /* 5.7:1 on --bg */
+    --danger-strong: #ef4444;
+    --log-bg:    #0b0d11;
+    --log-text:  #d4d4d4;
+    --row-a:     #1a1f27;
+    --row-b:     #1e242d;
 
-        --surface:        #1a1f27;
-        --surface-hover:  #232934;
-        --surface-sunken: #131720;
-        --surface-soft:   #1a1f27;
-        --surface-input:  #0f1115;
-        --gutter-bg:      #131720;
-        --secondary-btn-bg: #232934;
-        --row-hover:      #1f3354;
-        --chip-bg:        #232934;
-        --edit-btn-bg:    #4b5563;
-        --edit-btn-hover: #6b7280;
-        --toggle-track:   #3a414c;
-        --toggle-knob:    #e6e8eb;
-        --toast-default-bg: #2a2f38;
-        --toast-default-fg: #e6e8eb;
-        --on-accent:      #0f1115;        /* dark text on light accent for max contrast */
-        --header-fg:      #ffffff;        /* header stays on --blue, keep white */
-        --nav-link:       rgba(255,255,255,.88);
-        --nav-link-hover-bg: rgba(255,255,255,.12);
-        --nav-link-active-bg: rgba(255,255,255,.20);
-        --nav-mobile-hover-bg: rgba(255,255,255,.16);
-        --ws-default:     #6b7280;
-        --ws-connected:   #4ade80;
-        --ws-disconnected: #f87171;
-        --ok-color:       #4ade80;
-        --hard-toggle-fg: #9ba3ad;
-        --dsl-fg:         #d1d5db;
-        --shadow-strong:  rgba(0,0,0,.55);
-        --shadow-soft:    rgba(0,0,0,.45);
-        --modal-backdrop: rgba(0,0,0,.65);
+    --surface:        #1a1f27;
+    --surface-hover:  #232934;
+    --surface-sunken: #131720;
+    --surface-soft:   #1a1f27;
+    --surface-input:  #0f1115;
+    --gutter-bg:      #131720;
+    --secondary-btn-bg: #232934;
+    --row-hover:      #1f3354;
+    --chip-bg:        #232934;
+    --edit-btn-bg:    #4b5563;
+    --edit-btn-hover: #6b7280;
+    --toggle-track:   #3a414c;
+    --toggle-knob:    #e6e8eb;
+    --toast-default-bg: #2a2f38;
+    --toast-default-fg: #e6e8eb;
+    --on-accent:      #0f1115;        /* dark text on light accent for max contrast */
+    --header-fg:      #ffffff;        /* header stays on --blue, keep white */
+    --nav-link:       rgba(255,255,255,.88);
+    --nav-link-hover-bg: rgba(255,255,255,.12);
+    --nav-link-active-bg: rgba(255,255,255,.20);
+    --nav-mobile-hover-bg: rgba(255,255,255,.16);
+    --ws-default:     #6b7280;
+    --ws-connected:   #4ade80;
+    --ws-disconnected: #f87171;
+    --ok-color:       #4ade80;
+    --hard-toggle-fg: #9ba3ad;
+    --dsl-fg:         #d1d5db;
+    --shadow-strong:  rgba(0,0,0,.55);
+    --shadow-soft:    rgba(0,0,0,.45);
+    --modal-backdrop: rgba(0,0,0,.65);
 
-        --badge-ok-bg:    #1b3a25;
-        --badge-warn-bg:  #3a2a10;
-        --badge-err-bg:   #3a1a1a;
+    --badge-ok-bg:    #1b3a25;
+    --badge-warn-bg:  #3a2a10;
+    --badge-err-bg:   #3a1a1a;
 
-        --cm-active-line:        rgba(76,154,255,0.10);
-        --cm-active-line-gutter: rgba(76,154,255,0.16);
-        --cm-selection:          rgba(76,154,255,0.30);
+    --cm-active-line:        rgba(76,154,255,0.10);
+    --cm-active-line-gutter: rgba(76,154,255,0.16);
+    --cm-selection:          rgba(76,154,255,0.30);
 
-        --syn-keyword:  #79b8ff;
-        --syn-string:   #85e89d;
-        --syn-number:   #ffab70;
-        --syn-comment:  #9ba3ad;
-        --syn-function: #b392f0;
-        --syn-operator: #e6e8eb;
-        --syn-type:     #ffab70;
+    --syn-keyword:  #79b8ff;
+    --syn-string:   #85e89d;
+    --syn-number:   #ffab70;
+    --syn-comment:  #9ba3ad;
+    --syn-function: #b392f0;
+    --syn-operator: #e6e8eb;
+    --syn-type:     #ffab70;
 
-        --log-info:  #9cdcfe;
-        --log-warn:  #dcdcaa;
-        --log-err:   #ff7b72;
-        --log-debug: #7ee787;
-        --log-verb:  #9ba3ad;
+    --log-info:  #9cdcfe;
+    --log-warn:  #dcdcaa;
+    --log-err:   #ff7b72;
+    --log-debug: #7ee787;
+    --log-verb:  #9ba3ad;
 
-        --ota-bar:     #3fb950;
-        --ota-bar-ok:  #2ea043;
-        --ota-bar-err: #f85149;
+    --ota-bar:     #3fb950;
+    --ota-bar-ok:  #2ea043;
+    --ota-bar-err: #f85149;
 
-        --spinner-track: #3a414c;
-    }
+    --spinner-track: #3a414c;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -889,3 +891,8 @@ textarea:focus { outline: none; border-color: var(--blue); }
     color: var(--text, #1f2328);
     mix-blend-mode: difference;
 }
+
+/* Settings → Appearance theme radios. */
+.theme-radio-group { display: flex; gap: 16px; }
+.theme-radio { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.theme-radio input[type="radio"] { margin: 0; }

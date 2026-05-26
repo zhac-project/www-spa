@@ -11,6 +11,7 @@ import { getDevice, renameDevice, reinterviewDevice, configureDevice,
 import { devices as devicesStore } from "../stores/devices.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
+import { call } from "../ws/client.js";
 
 const TABS = [
     { id: "info",     label: "Info"     },
@@ -581,6 +582,50 @@ function BindForm({ ieee }) {
     );
 }
 
+// Per-device report rate-limit. PRESENTATION ONLY — collects a number and
+// POSTs `device.options.set`; all throttle logic lives in firmware
+// (device_shadow). 0 = disabled. Useful for chatty Tuya-DP sensors
+// (air-quality monitors) that report every few seconds with no device-side
+// reporting-interval control.
+function ThrottleControl({ d, ieee }) {
+    const cur = (d.throttle_ms != null) ? d.throttle_ms
+              : (d.options && d.options.throttle_ms != null) ? d.options.throttle_ms
+              : "";
+    const [val, setVal] = useState(cur);
+    const [busy, setBusy] = useState(false);
+    const save = async () => {
+        const n = parseInt(val, 10);
+        if (Number.isNaN(n) || n < 0) { showToast("Enter milliseconds ≥ 0"); return; }
+        setBusy(true);
+        try {
+            await call("device.options.set", { ieee, throttle_ms: n });
+            showToast(n === 0 ? "Report throttle disabled"
+                              : `Report throttle set to ${n} ms`, SUCCESS);
+        } catch (_) {
+            showToast("Failed to set throttle");
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <div class="opt-throttle">
+            <label class="form-row">
+                <span>Report throttle (ms)</span>
+                <input type="number" min="0" step="1000" value={val}
+                       placeholder="0 = off" disabled={busy}
+                       onInput={e => setVal(e.currentTarget.value)} />
+            </label>
+            <button class="btn" disabled={busy} onClick={save}>
+                {busy ? "Saving…" : "Save"}
+            </button>
+            <p class="tab-hint">
+                Caps state updates to one per N&nbsp;ms (firmware-side). Use for
+                chatty sensors that report every few seconds. 0 disables.
+            </p>
+        </div>
+    );
+}
+
 function OptionsTab({ d, ieee }) {
     // Reference table of exposes explicitly marked `category: "config"` by
     // the device definition (z2m convention). State-level attributes
@@ -595,6 +640,7 @@ function OptionsTab({ d, ieee }) {
     const exposes = (d.exposes || []).filter(e => e && e.category === "config");
     return (
         <div class="tab-panel">
+            <ThrottleControl d={d} ieee={ieee} />
             <p class="tab-hint">
                 Reference view of this device's configuration exposes
                 (read-only). To change a value, use the matching row on the

@@ -22,6 +22,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     recommended header value.
   -->
   <title>ZHAC</title>
+  <script>
+    // Apply saved/OS theme BEFORE CSS loads so a dark-mode user doesn't see
+    // a light-mode flash. Single source of truth: localStorage "theme" key
+    // with values {"system","light","dark"}. The Preact signal `themeMode`
+    // in src/stores/ui.js takes over once the app boots.
+    (function () {
+      try {
+        var saved = localStorage.getItem("theme");
+        var mode = (saved === "light" || saved === "dark" || saved === "system") ? saved : "system";
+        var effective = (mode === "system")
+          ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : mode;
+        document.documentElement.dataset.theme = effective;
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>

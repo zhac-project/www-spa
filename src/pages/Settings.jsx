@@ -5,9 +5,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
 import { status } from "../stores/status.js";
-import { showToast, navigate } from "../stores/ui.js";
+import { showToast, navigate, themeMode, setTheme } from "../stores/ui.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
+import { fmtSince } from "../utils.js";
 
 export function SettingsPage() {
     const d = status.value || {};
@@ -83,6 +84,28 @@ export function SettingsPage() {
     return (
         <div class="page">
             <div class="cards">
+                <Card title="Appearance">
+                    <div class="theme-radio-group" role="radiogroup" aria-label="Theme">
+                        {["system", "light", "dark"].map((m) => (
+                            <label key={m} class="theme-radio">
+                                <input
+                                    type="radio"
+                                    name="theme"
+                                    value={m}
+                                    checked={themeMode.value === m}
+                                    onChange={() => setTheme(m)}
+                                />
+                                <span class="theme-radio-label">
+                                    {m === "system" ? "System" : m === "light" ? "Light" : "Dark"}
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                    <div class="muted" style="margin-top:8px;font-size:12px">
+                        System follows your OS/browser preference. Light and Dark override it.
+                    </div>
+                </Card>
+
                 <Card title="WiFi">
                     <div style="margin-bottom:12px">
                         {wifi == null ? "…" : (
@@ -189,10 +212,122 @@ export function SettingsPage() {
                     <button class="primary small"
                             onClick={() => navigate("ota")}>Open OTA page</button>
                 </Card>
+
+                {d.remote_available && <RemoteCard />}
             </div>
         </div>
     );
 }
+
+// ---------------------------------------------------------------------------
+// Remote card — §5.6
+// ---------------------------------------------------------------------------
+
+const STATE_BADGE = {
+    DISABLED:        { kind: null,   label: "Disabled" },
+    IDLE_NO_WIFI:    { kind: "warn", label: "No WiFi" },
+    CONNECTING:      { kind: "warn", label: "Connecting" },
+    AUTHENTICATING:  { kind: "warn", label: "Authenticating" },
+    READY:           { kind: "ok",   label: "Connected" },
+    BACKOFF:         { kind: "warn", label: "Reconnecting" },
+};
+
+function RemoteStateBadge({ state }) {
+    const entry = STATE_BADGE[state] || { kind: null, label: state || "—" };
+    if (!entry.kind) return <span class="muted">{entry.label}</span>;
+    return <Badge kind={entry.kind}>{entry.label}</Badge>;
+}
+
+function RemoteCard() {
+    const [url,      setUrl]      = useState("");
+    const [token,    setToken]    = useState("");
+    const [deviceId, setDeviceId] = useState("");
+    const [st,       setSt]       = useState(null);   // remote.status response
+
+    useEffect(() => {
+        let alive = true;
+        let t;
+
+        async function tick() {
+            try {
+                const res = await call("remote.status");
+                if (alive) setSt(res);
+            } catch (_) {}
+            if (alive) t = setTimeout(tick, 5000);
+        }
+
+        tick();
+        return () => { alive = false; clearTimeout(t); };
+    }, []);
+
+    async function doConnect() {
+        try {
+            await call("remote.connect", { url, token, device_id: deviceId });
+            showToast("Remote connect requested", "ok");
+        } catch (e) { showToast("Connect failed: " + e.message, "err"); }
+    }
+
+    async function doDisconnect() {
+        try {
+            await call("remote.disconnect", { forget: false });
+            showToast("Disconnected", "ok");
+        } catch (e) { showToast("Disconnect failed: " + e.message, "err"); }
+    }
+
+    async function doForget() {
+        if (!confirm("Forget remote credentials and disconnect?")) return;
+        try {
+            await call("remote.disconnect", { forget: true });
+            showToast("Credentials forgotten", "ok");
+        } catch (e) { showToast("Failed: " + e.message, "err"); }
+    }
+
+    return (
+        <Card title="Remote">
+            <label>URL
+                <input type="text" value={url} placeholder="wss://example.com/zhac"
+                       autocomplete="off"
+                       onInput={(e) => setUrl(e.currentTarget.value)} />
+            </label>
+            <label>Token
+                <input type="password" value={token} placeholder="(paste token)"
+                       autocomplete="off"
+                       onInput={(e) => setToken(e.currentTarget.value)} />
+            </label>
+            <label>Device ID <span class="muted" style="font-weight:normal;font-size:12px">(optional — defaults to base MAC)</span>
+                <input type="text" value={deviceId} placeholder="leave blank to use base MAC"
+                       autocomplete="off"
+                       onInput={(e) => setDeviceId(e.currentTarget.value)} />
+            </label>
+            <div class="btn-strip" style="margin-top:8px">
+                <button class="primary small" onClick={doConnect}>Connect</button>
+                <button class="secondary small" onClick={doDisconnect}>Disconnect</button>
+                <button class="danger small" onClick={doForget}>Forget credentials</button>
+            </div>
+            {st && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <dl class="info-dl">
+                        <dt>State</dt>
+                        <dd><RemoteStateBadge state={st.state} /></dd>
+                        <dt>Connected since</dt>
+                        <dd>{st.connected_since ? fmtSince(st.connected_since) : "—"}</dd>
+                        <dt>Last event</dt>
+                        <dd>{st.last_event_at ? fmtSince(st.last_event_at) : "—"}</dd>
+                        <dt>RTT</dt>
+                        <dd>{st.rtt_ms != null ? st.rtt_ms + " ms" : "—"}</dd>
+                        <dt>TX drops</dt>
+                        <dd>{st.tx_drops ?? "—"}</dd>
+                        <dt>Auth fails</dt>
+                        <dd>{st.auth_fails ?? "—"}</dd>
+                    </dl>
+                </>
+            )}
+        </Card>
+    );
+}
+
+// ---------------------------------------------------------------------------
 
 function ToggleRow({ label, checked, onChange }) {
     return (

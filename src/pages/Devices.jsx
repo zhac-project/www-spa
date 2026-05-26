@@ -3,6 +3,7 @@
 // Device list with permit-join control + rename / re-interview / delete.
 // Permit-join is fire-and-forget here; the detail page handles per-device ops.
 import { useState, useEffect } from "preact/hooks";
+import { signal } from "@preact/signals";
 import { devices, bootstrapDevices, deleteDevice } from "../stores/devices.js";
 import { call } from "../ws/client.js";
 import { navigate, showToast, hrefFor } from "../stores/ui.js";
@@ -18,46 +19,105 @@ async function confirmRemove(ieee) {
     }
 }
 
+// Module-level signal so `permitJoin` (called from button handlers) and
+// `PermitJoinStatus` (the visual countdown) share state without prop drilling.
+// Each Devices page mount re-uses the same signal — survives nav-away/return.
+const pjState = signal({ open: false, remaining_sec: 0 });
+
 async function permitJoin(duration) {
     try {
         await call("zigbee.permit_join", { duration });
+        // Optimistic local state — the request returns when the SRSP lands on
+        // P4, so by the time we get here the window IS open / closed. Skip the
+        // server round-trip and drive the countdown locally.
+        pjState.value = { open: duration > 0, remaining_sec: duration };
         showToast(duration > 0 ? `Join open for ${duration}s` : "Join closed", "ok");
     } catch (e) {
         showToast("Permit-join failed: " + e.message, "err");
     }
 }
 
-// Polls `zigbee.permit_join.status` while mounted. The S3 tracks the
-// current window locally (the state is authoritative on P4 but the S3
-// knows what it last requested, which is what matters for UI feedback).
+// Permit-join status display. Two timers:
+//   1. While OPEN: local 1 s countdown decrementing pjState.remaining_sec.
+//      No server polls — the SPA initiated the open + knows the duration,
+//      so it counts down by itself. When it hits 0 → switch to closed.
+//   2. While CLOSED: 10 s server poll on `zigbee.permit_join.status` to
+//      detect external opens (e.g. someone using a separate tool / API
+//      key to open the window). Only runs while this component is mounted,
+//      i.e. only while the Devices page is in view.
 //
-// Self-scheduling setTimeout chain instead of setInterval: a slow httpd
-// round-trip (≥1 s on a loaded ESP-IDF httpd) would otherwise overlap
-// the next interval tick and stack inflight calls. We only schedule the
-// next tick after the current one settles, so cadence becomes "at least
-// N ms between completed calls" rather than "fire every N ms regardless".
+// On mount: one-shot status fetch so a fresh page visit mid-window sees
+// the current remaining time (in case the optimistic local state from a
+// prior mount was lost).
+//
+// On tab visibility change (focus return): re-fetch status. Local
+// countdown drifts if the tab was backgrounded (browsers throttle
+// setTimeout when hidden); re-sync to truth.
 function PermitJoinStatus() {
-    const [state, setState] = useState({ open: false, remaining_sec: 0 });
+    const [, force] = useState(0);  // re-render on signal change
     useEffect(() => {
         let alive = true;
-        let t = null;
-        async function tick() {
-            if (!alive) return;
-            let next = { open: false, remaining_sec: 0 };
+        let pollT = null;
+        let tickT = null;
+        const rerender = () => alive && force((n) => n + 1);
+        const unsubscribe = pjState.subscribe(rerender);
+
+        async function syncFromServer() {
             try {
                 const d = await call("zigbee.permit_join.status");
-                next = d || next;
-                if (alive) setState(next);
-            } catch { /* ignore transient errors */ }
-            // Adaptive cadence: 1 s while window is open (countdown UX),
-            // 10 s while closed (idle — no UI to update, just confirm state).
-            if (alive) t = setTimeout(tick, next.open ? 1000 : 10000);
+                if (alive && d) pjState.value = {
+                    open: !!d.open,
+                    remaining_sec: d.remaining_sec | 0,
+                };
+            } catch { /* transient — keep current state */ }
         }
-        tick();
-        return () => { alive = false; if (t) clearTimeout(t); };
+
+        function schedulePoll() {
+            if (pollT) clearTimeout(pollT);
+            pollT = setTimeout(async () => {
+                if (!alive) return;
+                if (!pjState.value.open) await syncFromServer();
+                if (alive) schedulePoll();
+            }, 10_000);
+        }
+
+        function tickCountdown() {
+            if (tickT) clearTimeout(tickT);
+            tickT = setTimeout(() => {
+                if (!alive) return;
+                const cur = pjState.value;
+                if (cur.open) {
+                    const next = Math.max(0, cur.remaining_sec - 1);
+                    pjState.value = next > 0
+                        ? { open: true, remaining_sec: next }
+                        : { open: false, remaining_sec: 0 };
+                }
+                if (alive) tickCountdown();
+            }, 1000);
+        }
+
+        function onVisibility() {
+            if (document.visibilityState === "visible") syncFromServer();
+        }
+        document.addEventListener("visibilitychange", onVisibility);
+
+        // Initial sync + start timers.
+        syncFromServer();
+        schedulePoll();
+        tickCountdown();
+
+        return () => {
+            alive = false;
+            if (pollT) clearTimeout(pollT);
+            if (tickT) clearTimeout(tickT);
+            document.removeEventListener("visibilitychange", onVisibility);
+            unsubscribe();
+        };
     }, []);
-    if (state.open) {
-        return <span class="pj-status pj-open">Open · {state.remaining_sec}s</span>;
+
+    const s = pjState.value;
+    if (s.open) {
+        return <span class="pj-status pj-open">Open · {s.remaining_sec}s</span>;
     }
     return <span class="pj-status pj-closed">Closed</span>;
 }

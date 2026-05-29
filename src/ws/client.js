@@ -14,14 +14,10 @@ const REQUEST_TIMEOUT_MS = 15000;         // belt-and-braces — reject stale re
 
 function wsUrl() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    // Browser WebSocket API forbids custom headers on the handshake,
-    // so when auth is enabled we must smuggle the API token through the
-    // query string. Source of truth is localStorage.zhac_token; Settings
-    // page sets/clears it.
-    let token = null;
-    try { token = localStorage.getItem("zhac_token"); } catch (_) {}
-    const q = token ? `?token=${encodeURIComponent(token)}` : "";
-    return `${proto}://${location.host}/ws${q}`;
+    // F18 (FINDINGS.md): the token no longer rides the URL query string (it
+    // leaked into proxy / httpd access logs). The socket opens unauthenticated
+    // and we authenticate with a first `auth` message — see the 'open' handler.
+    return `${proto}://${location.host}/ws`;
 }
 
 function rejectAll(err) {
@@ -41,6 +37,14 @@ function connect() {
 
     ws.addEventListener("open", () => {
         ui.value = { ...ui.value, connected: true };
+        // F18: authenticate first (token in a frame, not the URL). Sent before
+        // any openHandler command so the server marks this socket authed before
+        // it processes them (WS messages are delivered in order).
+        let token = null;
+        try { token = localStorage.getItem("zhac_token"); } catch (_) {}
+        if (token) {
+            try { ws.send(JSON.stringify({ cmd: "auth", args: { token } })); } catch (_) {}
+        }
         for (const fn of openHandlers) { try { fn(); } catch (_) {} }
     });
 

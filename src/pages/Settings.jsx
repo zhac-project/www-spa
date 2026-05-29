@@ -201,6 +201,7 @@ export function SettingsPage() {
                     {d.auth_enabled && d.api_token && (
                         <ApiTokenRow token={d.api_token} />
                     )}
+                    <ApiTokenSetupRow />
                 </Card>
 
                 <Card title="OTA">
@@ -365,6 +366,47 @@ function ApiTokenRow({ token }) {
                 {shown ? "Hide" : "Show"}
             </button>
             <button type="button" class="small" onClick={copy}>Copy</button>
+            <button type="button" class="small" onClick={() => {
+                try { localStorage.setItem("zhac_token", token); } catch (_) {}
+                showToast("Token saved to this browser — reconnecting", "ok");
+                setTimeout(() => location.reload(), 400);
+            }}>Use here</button>
+        </div>
+    );
+}
+
+// F19 (FINDINGS.md): the browser keeps the bearer token in
+// localStorage.zhac_token; ws/client.js reads it on every (re)connect and
+// the REST helper sends it as the X-Api-Key header. This row is the only
+// place that SETS it, and it stays reachable while unauthenticated so the
+// first-boot bootstrap works: the operator reads the token from the serial
+// console (printed once at first boot), pastes it here, hits Save. Saving
+// reloads the page so the WebSocket re-handshakes with the new token.
+function ApiTokenSetupRow() {
+    const [val, setVal] = useState("");
+    let saved = "";
+    try { saved = localStorage.getItem("zhac_token") || ""; } catch (_) {}
+    function save() {
+        const t = val.trim();
+        if (!t) { showToast("Paste a token first", "err"); return; }
+        try { localStorage.setItem("zhac_token", t); } catch (_) {}
+        showToast("Token saved — reconnecting", "ok");
+        setTimeout(() => location.reload(), 400);
+    }
+    function clearTok() {
+        try { localStorage.removeItem("zhac_token"); } catch (_) {}
+        showToast("Token cleared — reconnecting", "ok");
+        setTimeout(() => location.reload(), 400);
+    }
+    return (
+        <div class="field-hint" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>This browser's token:</span>
+            <code class="mono">{saved ? "saved ✓" : "not set"}</code>
+            <input type="password" value={val} placeholder="paste API token"
+                   onInput={(e) => setVal(e.currentTarget.value)}
+                   style="flex:1;min-width:160px" />
+            <button type="button" class="small" onClick={save}>Save</button>
+            <button type="button" class="small" onClick={clearTok}>Clear</button>
         </div>
     );
 }

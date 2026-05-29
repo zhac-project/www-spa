@@ -20,6 +20,13 @@ import { call, on } from "../ws/client.js";
 // returned unsubscribes so HMR re-execution or test re-imports don't
 // stack duplicate handlers (which would double-append / double-delete
 // on the signal).
+// F46 (FINDINGS.md): defensive upper bound on a store's array so a flooding /
+// misbehaving server pushing endless `*.added` events can't grow it without
+// limit in a long-lived tab. Real resource counts (rules/scripts/groups) are
+// far below this; bootstrap() re-reads the authoritative list, so a dropped
+// add self-heals on the next refresh.
+const MAX_ITEMS = 1000;
+
 export function createCrudStore({ name, listCmd, listKey, idKey }) {
     const sig = signal([]);
 
@@ -34,6 +41,7 @@ export function createCrudStore({ name, listCmd, listKey, idKey }) {
         on(`${name}.added`, (r) => {
             if (!r || r[idKey] == null) return;
             if (sig.value.some(x => sameId(x, r))) return;
+            if (sig.value.length >= MAX_ITEMS) return;   // F46: bound memory under event floods
             sig.value = [...sig.value, r];
         }),
         on(`${name}.updated`, (r) => {

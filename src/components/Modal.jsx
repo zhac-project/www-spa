@@ -29,6 +29,14 @@ export function Modal({ open, title, children, onClose, footer }) {
     const titleIdRef = useRef(null);
     if (titleIdRef.current == null) titleIdRef.current = `modal-title-${++modalSeq}`;
 
+    // The focus/trap effect must run ONLY when `open` flips — not whenever the
+    // caller passes a fresh `onClose` arrow (which is every render). Reach the
+    // latest onClose through a ref so it isn't an effect dependency; otherwise
+    // each keystroke re-runs the effect and `items[0].focus()` steals focus back
+    // to the first field.
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
     useEffect(() => {
         if (!open) return;
         // Remember which element triggered the open so we can return focus
@@ -44,7 +52,7 @@ export function Modal({ open, title, children, onClose, footer }) {
         else boxRef.current?.focus();
 
         function onKey(e) {
-            if (e.key === "Escape") { onClose?.(); return; }
+            if (e.key === "Escape") { onCloseRef.current?.(); return; }
             if (e.key !== "Tab") return;
             const list = focusableIn(boxRef.current);
             if (list.length === 0) {
@@ -81,7 +89,7 @@ export function Modal({ open, title, children, onClose, footer }) {
             }
             triggerRef.current = null;
         };
-    }, [open, onClose]);
+    }, [open]);   // onClose reached via ref — NOT a dep (see above)
 
     if (!open) return null;
 

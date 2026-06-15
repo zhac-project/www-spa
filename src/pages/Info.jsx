@@ -36,6 +36,7 @@ export function InfoPage() {
     const fmtPair = (a, b) => a != null ? fmtBytes(a) + " / " + fmtBytes(b || 0) : "—";
 
     const s3Rows = [
+        ["Firmware",       d.fw_version || "—"],
         ["Uptime",         d.uptime != null ? fmtUptime(d.uptime) : "—"],
         ["WiFi",           d.wifi ? <Badge kind="ok">Connected</Badge> : <Badge kind="err">Disconnected</Badge>],
         ["IP Address",     d.ip  || "—"],

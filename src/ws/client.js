@@ -43,7 +43,13 @@ function connect() {
         let token = null;
         try { token = localStorage.getItem("zhac_token"); } catch (_) {}
         if (token) {
-            try { ws.send(JSON.stringify({ cmd: "auth", args: { token } })); } catch (_) {}
+            // The auth frame MUST carry an `id`: the firmware's on_ws_rx routes
+            // only id-bearing frames to the envelope dispatcher (where the auth
+            // handler lives); an id-less frame falls to the deprecated legacy
+            // path and never authenticates, so the socket stays unauthed and
+            // every real command is rejected. The `{id:"auth",ok:true}` reply
+            // has no pending entry, so the message handler ignores it.
+            try { ws.send(JSON.stringify({ id: "auth", cmd: "auth", args: { token } })); } catch (_) {}
         }
         for (const fn of openHandlers) { try { fn(); } catch (_) {} }
     });

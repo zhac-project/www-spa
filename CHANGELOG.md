@@ -10,6 +10,18 @@ across the ZHAC platform.
 
 ### Added
 
+- **Sign-in gate**: when the controller has API auth enabled (secure-by-default
+  on fresh units) and this browser holds no valid token, the SPA now shows a
+  full-screen login card instead of a blank shell. It probes the public
+  `/api/status` for `auth_enabled`, validates any stored token against a gated
+  endpoint (explicit 2xx, so a wrong URL or a network error fails closed), and
+  starts the WebSocket only once past the gate. Pre-app "connecting…" and
+  "can't reach the controller / retry" splashes replace the silent blank.
+  Submitting a valid 32-char token stores it and reloads to re-handshake (same
+  flow as Settings). To disable auth for development, log in with the serial
+  token and turn Auth off under Settings — the device default stays secure. Dev:
+  the Vite server now proxies `/api` (not just `/ws`) to `:8080` so the probe and
+  REST work under `npm run dev`.
 - **Device → Options tab**: per-device "Report throttle (ms)" field — a number
   input + Save that POSTs `device.options.set {ieee, throttle_ms}`. Caps the
   update flood from chatty Tuya-DP sensors (air-quality monitors). Presentation

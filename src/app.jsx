@@ -5,10 +5,13 @@
 // `#/page` ↔ signal sync. ErrorBoundary catches render-time throws so a
 // single bad signal subscriber doesn't white-screen the whole SPA.
 import { Component } from "preact";
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { ui, navigate, hrefFor } from "./stores/ui.js";
 import { wireBootstrap } from "./ws/events.js";
 import { ToastHost } from "./components/Toast.jsx";
+import { Spinner } from "./components/Spinner.jsx";
+import { Login } from "./pages/Login.jsx";
+import { authState, probeAuth } from "./stores/auth.js";
 
 import { InfoPage }         from "./pages/Info.jsx";
 import { DevicesPage }      from "./pages/Devices.jsx";
@@ -21,8 +24,11 @@ import { DiagPage }         from "./pages/Diag.jsx";
 import { OtaPage }          from "./pages/Ota.jsx";
 import { SettingsPage }     from "./pages/Settings.jsx";
 
-// Kick off WS bootstrap once, as soon as the app mounts.
-wireBootstrap();
+// WS bootstrap must not start until the auth gate passes — an unauthenticated
+// socket just loops connect → reject. Fire it exactly once, when auth first
+// resolves OK (see the App gate below).
+let booted = false;
+function ensureBootstrap() { if (!booted) { booted = true; wireBootstrap(); } }
 
 const NAV = [
     { id: "info",     label: "Info" },
@@ -65,7 +71,41 @@ class ErrorBoundary extends Component {
     }
 }
 
+// Top-level auth gate. Probes the device's auth state once on mount and renders
+// the sign-in gate (rather than a blank shell) when a token is required and
+// missing. The WebSocket is started only after we pass, so the login screen
+// isn't fighting a reconnect loop.
 export function App() {
+    const st = authState.value;
+    useEffect(() => { probeAuth(); }, []);
+    useEffect(() => { if (st === "ok") ensureBootstrap(); }, [st]);
+
+    if (st === "checking") {
+        return <Splash><Spinner label="Connecting to controller…" /></Splash>;
+    }
+    if (st === "offline") {
+        return (
+            <Splash>
+                <p class="error-text">Can’t reach the controller.</p>
+                <button class="primary" onClick={() => probeAuth()}>Retry</button>
+            </Splash>
+        );
+    }
+    if (st === "needsAuth") return <Login />;
+    return <AppShell />;
+}
+
+// Centered brand splash for the pre-app states (connecting / offline).
+function Splash({ children }) {
+    return (
+        <div class="splash">
+            <span class="brand splash-brand">ZHAC</span>
+            <div class="splash-body">{children}</div>
+        </div>
+    );
+}
+
+function AppShell() {
     const [menuOpen, setMenuOpen] = useState(false);
     const page = ui.value.activePage;
     const connected = ui.value.connected;

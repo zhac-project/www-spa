@@ -896,3 +896,49 @@ textarea:focus { outline: none; border-color: var(--blue); }
 .theme-radio-group { display: flex; gap: 16px; }
 .theme-radio { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .theme-radio input[type="radio"] { margin: 0; }
+
+/* ── Auth gate + pre-app splash ────────────────────────────────────── */
+.splash, .login-gate {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+}
+.splash-brand, .login-brand {
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: var(--blue);
+}
+.splash-body { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+.login-card {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 28px 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
+}
+.login-card .login-brand { text-align: center; }
+.login-title { margin: 0; font-size: 20px; }
+.login-lead  { margin: 0; color: var(--muted); }
+.login-field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.login-field input {
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-input);
+    color: var(--text);
+}
+.login-card button { width: 100%; padding: 10px 12px; }
+.login-hint { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }

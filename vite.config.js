@@ -31,8 +31,13 @@ export default defineConfig({
         },
     },
     server: {
+        // Dev-only (never in the production build): forward both transports to
+        // the firmware on :8080 so `npm run dev` exercises REST + WS exactly as
+        // the on-device same-origin SPA does. Without the /api entry the auth
+        // probe and every REST call 404 against the Vite server.
         proxy: {
-            "/ws": { target: "ws://localhost:8080", ws: true },
+            "/ws":  { target: "ws://localhost:8080", ws: true },
+            "/api": { target: "http://localhost:8080" },
         },
     },
 });

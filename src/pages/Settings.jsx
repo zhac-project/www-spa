@@ -204,6 +204,8 @@ export function SettingsPage() {
                     <ApiTokenSetupRow />
                 </Card>
 
+                {d.auth_enabled && <ChangePasswordCard />}
+
                 <Card title="OTA">
                     <p class="muted" style="margin-bottom:8px;font-size:13px">
                         Firmware updates live on the dedicated OTA page, which
@@ -372,6 +374,70 @@ function ApiTokenRow({ token }) {
                 setTimeout(() => location.reload(), 400);
             }}>Use here</button>
         </div>
+    );
+}
+
+// Change the admin password (POST /api/auth/password). Requires the current
+// password (token possession alone must not be enough to change it) and
+// rotates the API token on success, signing every OTHER browser out; this
+// browser re-saves the fresh token from the response and reloads.
+function ChangePasswordCard() {
+    const [cur, setCur]         = useState("");
+    const [next, setNext]       = useState("");
+    const [confirm, setConfirm] = useState("");
+    const [busy, setBusy]       = useState(false);
+
+    async function change() {
+        if (busy) return;
+        if (next.length < 8 || next.length > 63) {
+            showToast("New password must be 8-63 characters", "err"); return;
+        }
+        if (next !== confirm) {
+            showToast("Passwords don't match", "err"); return;
+        }
+        setBusy(true);
+        let tok = "";
+        try { tok = localStorage.getItem("zhac_token") || ""; } catch (_) {}
+        let r;
+        try {
+            r = await fetch("/api/auth/password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Api-Key": tok },
+                body: JSON.stringify({ current: cur, new: next }),
+            });
+        } catch (_) {
+            setBusy(false); showToast("Device unreachable", "err"); return;
+        }
+        setBusy(false);
+        if (r.status === 401) { showToast("Current password is wrong", "err"); return; }
+        if (!r.ok)            { showToast("Change failed (" + r.status + ")", "err"); return; }
+        const data = await r.json().catch(() => null);
+        if (data && data.token) {
+            try { localStorage.setItem("zhac_token", data.token); } catch (_) {}
+        }
+        showToast("Password changed — reconnecting", "ok");
+        setTimeout(() => location.reload(), 400);
+    }
+
+    return (
+        <Card title="Admin password">
+            <p class="muted" style="margin-bottom:8px;font-size:13px">
+                Used to sign in to this WebUI. Changing it signs out every
+                other browser and rotates the API token.
+            </p>
+            <label class="login-field"><span>Current password</span>
+                <input type="password" value={cur} autocomplete="current-password"
+                       onInput={(e) => setCur(e.currentTarget.value)} /></label>
+            <label class="login-field"><span>New password</span>
+                <input type="password" value={next} autocomplete="new-password"
+                       placeholder="8-63 characters"
+                       onInput={(e) => setNext(e.currentTarget.value)} /></label>
+            <label class="login-field"><span>Confirm new password</span>
+                <input type="password" value={confirm} autocomplete="new-password"
+                       onInput={(e) => setConfirm(e.currentTarget.value)} /></label>
+            <button class="primary small" disabled={busy || !next || !confirm}
+                    onClick={change}>{busy ? "Saving…" : "Change password"}</button>
+        </Card>
     );
 }
 

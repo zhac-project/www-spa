@@ -1,50 +1,83 @@
 // SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Full-screen sign-in gate, shown when the controller has API auth enabled and
-// this browser holds no valid token. Replaces the old failure mode where an
-// unauthenticated SPA rendered a blank shell with no explanation. On success
-// the token is stored and the page reloads so the WebSocket re-handshakes with
-// it (the same flow Settings uses when you paste a token there).
+// Full-screen auth gate. Two modes driven by the auth store:
+//  - "needsSetup": first-boot (or pre-password firmware upgrade) — the device
+//    has no admin password yet; this one-time card sets it and logs in.
+//  - "needsAuth": normal sign-in with the admin password, exchanged for the
+//    API token via POST /api/auth/login. An "advanced" toggle still accepts a
+//    raw 32-char API token (serial-log workflow / older firmware).
+// On success the token is stored and the page reloads so the WebSocket
+// re-handshakes with it (the same flow Settings uses).
 import { useState } from "preact/hooks";
-import { authError, submitToken } from "../stores/auth.js";
+import { authError, submitToken, submitPassword, submitSetup } from "../stores/auth.js";
 
-export function Login() {
-    const [token, setToken] = useState("");
-    const [busy, setBusy]   = useState(false);
+export function Login({ setup = false }) {
+    const [pw, setPw]           = useState("");
+    const [confirm, setConfirm] = useState("");
+    const [useToken, setUseToken] = useState(false);
+    const [busy, setBusy]       = useState(false);
     const err = authError.value;
 
     async function onSubmit(e) {
         e.preventDefault();
         if (busy) return;
         setBusy(true);
-        const ok = await submitToken(token);
+        const ok = setup ? await submitSetup(pw, confirm)
+                 : useToken ? await submitToken(pw)
+                 : await submitPassword(pw);
         setBusy(false);
-        if (ok) location.reload();   // re-handshake WS + REST with the new token
+        if (ok) location.reload();   // re-handshake WS + REST with the token
     }
 
     return (
         <div class="login-gate">
             <form class="login-card" onSubmit={onSubmit}>
                 <span class="brand login-brand">ZHAC</span>
-                <h2 class="login-title">Sign in</h2>
-                <p class="login-lead">This controller requires an API token.</p>
+                <h2 class="login-title">{setup ? "Set admin password" : "Sign in"}</h2>
+                <p class="login-lead">
+                    {setup
+                        ? "First boot: choose the admin password for this controller."
+                        : useToken
+                            ? "Paste the 32-character API token."
+                            : "Enter the admin password."}
+                </p>
                 <label class="login-field">
-                    <span>API token</span>
-                    <input type="password" value={token} autoFocus
-                           autocomplete="off" spellcheck={false}
-                           placeholder="32-character token"
-                           onInput={(e) => setToken(e.currentTarget.value)} />
+                    <span>{setup ? "New password" : useToken ? "API token" : "Password"}</span>
+                    <input type="password" value={pw} autoFocus
+                           autocomplete={setup ? "new-password" : "current-password"}
+                           spellcheck={false}
+                           placeholder={setup ? "8-63 characters"
+                                       : useToken ? "32-character token" : ""}
+                           onInput={(e) => setPw(e.currentTarget.value)} />
                 </label>
+                {setup && (
+                    <label class="login-field">
+                        <span>Confirm password</span>
+                        <input type="password" value={confirm}
+                               autocomplete="new-password" spellcheck={false}
+                               onInput={(e) => setConfirm(e.currentTarget.value)} />
+                    </label>
+                )}
                 {err && <p class="error-text">{err}</p>}
                 <button type="submit" class="primary"
-                        disabled={busy || !token.trim()}>
-                    {busy ? "Checking…" : "Connect"}
+                        disabled={busy || !pw.trim() || (setup && !confirm.trim())}>
+                    {busy ? "Checking…" : setup ? "Set password & sign in" : "Sign in"}
                 </button>
+                {!setup && (
+                    <p class="login-hint">
+                        <a href="#" onClick={(e) => { e.preventDefault();
+                                                      setUseToken(!useToken); setPw(""); }}>
+                            {useToken ? "Use password instead" : "Use API token instead"}
+                        </a>
+                    </p>
+                )}
                 <p class="login-hint">
-                    The token is printed to the device’s serial log on first
-                    boot, or an admin can read/rotate it under Settings → Auth.
-                    If you own the device and lost it, disable Auth (or erase
-                    NVS) over serial.
+                    {setup
+                        ? "The password is stored on the device as a salted hash and " +
+                          "can be changed later under Settings → Auth."
+                        : "Lost the password? Hold the device's serial console: the API " +
+                          "token printed there still signs in (advanced), or erase NVS " +
+                          "to re-run first-boot setup."}
                 </p>
             </form>
         </div>

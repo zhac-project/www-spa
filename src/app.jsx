@@ -91,6 +91,7 @@ export function App() {
             </Splash>
         );
     }
+    if (st === "needsSetup") return <Login setup />;
     if (st === "needsAuth") return <Login />;
     return <AppShell />;
 }

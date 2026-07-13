@@ -10,6 +10,15 @@ across the ZHAC platform.
 
 ### Added
 
+- **Password sign-in + first-boot setup card.** The login gate now asks for
+  the admin password (exchanged for the API token via `POST /api/auth/login`;
+  the token stays the wire credential in `localStorage.zhac_token`). A fresh
+  device with no password (`auth_setup_required` on `/api/status`) gets a
+  one-time "Set admin password" card instead of the serial-log token hunt.
+  Settings gains an "Admin password" card (change password; rotates the API
+  token, signing other browsers out). The raw-token paste remains as an
+  "advanced" toggle on the login card and the existing Settings row.
+
 - **Sign-in gate**: when the controller has API auth enabled (secure-by-default
   on fresh units) and this browser holds no valid token, the SPA now shows a
   full-screen login card instead of a blank shell. It probes the public

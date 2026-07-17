@@ -10,6 +10,16 @@ across the ZHAC platform.
 
 ### Added
 
+- **Groups: add-member control.** Each group card now has a device picker +
+  Add button (devices not already members; `ep` defaults to 1, matching the
+  command fan-out and the firmware member parser), with a client-side cap at
+  the firmware's 16-member limit. Previously there was NO way to add a device
+  to a group anywhere in the SPA — the create-modal hint pointed at the
+  device Bind tab, which only manages ZDO cluster bindings; the hint text is
+  corrected. Group mutations (create/delete/member add/remove) now re-pull
+  `group.list` on success, so cards reflect changes without a manual Refresh
+  (groups have no push-event wiring).
+
 - **Password sign-in + first-boot setup card.** The login gate now asks for
   the admin password (exchanged for the API token via `POST /api/auth/login`;
   the token stays the wire credential in `localStorage.zhac_token`). A fresh

@@ -24,16 +24,21 @@ export function GroupsPage() {
 
     const devMap = Object.fromEntries((devices.value || []).map(d => [d.ieee, d]));
 
+    // Groups have no push-event wiring (list refreshes only on WS bootstrap or
+    // the Refresh button), so re-pull after every successful mutation.
+    const refresh = () => bootstrapGroups().catch(() => {});
+
     async function doCreate() {
         const name = (newName || "").trim();
         if (!name) return;
         const ok = await withToast(() => createGroup({ name }), "Group created", "Create failed");
-        if (ok === SUCCESS) { setCreating(false); setNewName(""); }
+        if (ok === SUCCESS) { setCreating(false); setNewName(""); refresh(); }
     }
 
     async function removeGroup(g) {
         if (!confirm(`Delete group "${g.name}" (id ${g.id})?`)) return;
-        await withToast(() => delGroupCall(g.id), "Deleted", "Delete failed");
+        const ok = await withToast(() => delGroupCall(g.id), "Deleted", "Delete failed");
+        if (ok === SUCCESS) refresh();
     }
 
     async function send(g, spec) {
@@ -44,7 +49,23 @@ export function GroupsPage() {
 
     async function removeMember(g, ieee) {
         const members = (g.members || []).filter(m => m.ieee !== ieee);
-        await withToast(() => updateGroup({ id: g.id, members }), "Member removed", "Failed");
+        const ok = await withToast(() => updateGroup({ id: g.id, members }), "Member removed", "Failed");
+        if (ok === SUCCESS) refresh();
+    }
+
+    const MAX_MEMBERS = 16;   // GRP_MAX_MEMBERS on the firmware side
+
+    async function addMember(g, ieee) {
+        if (!ieee) return;
+        const members = g.members || [];
+        if (members.length >= MAX_MEMBERS) {
+            showToast(`Group is full (${MAX_MEMBERS} members max)`, "err");
+            return;
+        }
+        const ok = await withToast(
+            () => updateGroup({ id: g.id, members: [...members, { ieee, ep: 1 }] }),
+            "Member added", "Failed");
+        if (ok === SUCCESS) refresh();
     }
 
     return (
@@ -80,6 +101,8 @@ export function GroupsPage() {
                                         );
                                     })}
                             </div>
+                            <AddMemberRow g={g} devices={devices.value || []}
+                                          onAdd={(ieee) => addMember(g, ieee)} />
                             <div class="group-cmd-row">
                                 <span class="muted">Send:</span>
                                 {GROUP_CMDS.map(c => (
@@ -102,8 +125,31 @@ export function GroupsPage() {
                 <label class="field-label">Name</label>
                 <input class="field-input" value={newName}
                        onInput={(e) => setNewName(e.currentTarget.value)} />
-                <p class="field-hint">Devices are added from a device's Bind tab.</p>
+                <p class="field-hint">Add devices from the group card after creating.</p>
             </Modal>
+        </div>
+    );
+}
+
+// Device picker + Add button on each group card. Lists only devices that are
+// not already members; ep defaults to 1 (same default the command fan-out and
+// the firmware member parser use).
+function AddMemberRow({ g, devices, onAdd }) {
+    const [sel, setSel] = useState("");
+    const memberSet = new Set((g.members || []).map(m => m.ieee));
+    const candidates = devices.filter(d => !memberSet.has(d.ieee));
+    if (candidates.length === 0) return null;
+    return (
+        <div class="group-add-row">
+            <select class="field-input small" value={sel}
+                    onChange={(e) => setSel(e.currentTarget.value)}>
+                <option value="">Add device…</option>
+                {candidates.map(d => (
+                    <option key={d.ieee} value={d.ieee}>{d.name || d.ieee}</option>
+                ))}
+            </select>
+            <button class="small primary" disabled={!sel}
+                    onClick={() => { onAdd(sel); setSel(""); }}>Add</button>
         </div>
     );
 }

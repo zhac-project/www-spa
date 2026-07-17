@@ -102,6 +102,17 @@ export async function bindDevice(args) {
     return call("device.bind", args);
 }
 
+// Native ZCL Groups (cluster 0x0004) membership, routed over the generic
+// attr-set path: key group_add / group_remove, value = group id. Lets a light
+// obey a hardware zone-remote (e.g. MiBoxer FUT089Z groups 101-108) directly.
+export async function setDeviceGroup(ieee, ep, groupId, remove = false) {
+    return call("device.attr.set", {
+        ieee, ep, cluster: 4,
+        key: remove ? "group_remove" : "group_add",
+        value: groupId,
+    });
+}
+
 // ── Event fan-in ────────────────────────────────────────────────────────
 
 // IEEEs can arrive in mixed case ("0x70C5…" vs the stored lowercase

@@ -7,7 +7,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { ui, navigate, showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { getDevice, renameDevice, reinterviewDevice, configureDevice,
-         deleteDevice, setDeviceAttr, bindDevice } from "../stores/devices.js";
+         deleteDevice, setDeviceAttr, bindDevice, setDeviceGroup } from "../stores/devices.js";
 import { devices as devicesStore } from "../stores/devices.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
@@ -557,6 +557,44 @@ function BindTab({ d, ieee }) {
                 </table>
             )}
             <BindForm ieee={ieee} />
+            <GroupMembershipForm ieee={ieee} />
+        </div>
+    );
+}
+
+// Native ZCL Groups membership — add/remove this device (a light/controller)
+// to a Zigbee group id so it obeys commands sent to that group, including a
+// hardware zone-remote's groupcasts (MiBoxer FUT089Z: zones 1-8 = groups
+// 101-108). Fire-and-forget with ACK; the authoritative membership list +
+// "refresh from device" is a later increment.
+function GroupMembershipForm({ ieee }) {
+    const [ep, setEp] = useState(1);
+    const [gid, setGid] = useState("");
+    async function submit(remove) {
+        const g = parseInt(gid, 10);
+        if (!Number.isInteger(g) || g < 1 || g > 65535) {
+            showToast("Enter a group id 1–65535", "err");
+            return;
+        }
+        try {
+            await setDeviceGroup(ieee, Number(ep) || 1, g, remove);
+            showToast(remove ? `Removed from group ${g}` : `Added to group ${g}`, "ok");
+        } catch (e) { showToast("Group " + (remove ? "remove" : "add") + " failed: " + e.message, "err"); }
+    }
+    return (
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <h4 style="margin-bottom:8px;font-size:13px">ZCL group membership</h4>
+            <p class="field-hint" style="margin-bottom:8px">
+                Add this device to a Zigbee group so a hardware zone-remote can drive it
+                (e.g. MiBoxer FUT089Z zones = groups 101–108).
+            </p>
+            <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
+                   style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>
+            <label style="margin-right:10px">Group ID <input type="number" value={gid} min="1" max="65535"
+                   placeholder="101" style="width:90px"
+                   onInput={(e) => setGid(e.currentTarget.value)} /></label>
+            <button class="primary small" onClick={() => submit(false)}>Add</button>
+            <button class="small danger" style="margin-left:6px" onClick={() => submit(true)}>Remove</button>
         </div>
     );
 }

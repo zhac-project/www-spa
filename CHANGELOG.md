@@ -10,6 +10,12 @@ across the ZHAC platform.
 
 ### Added
 
+- **Device Bind tab: ZCL group membership control.** Add / remove a device to a
+  Zigbee group id (EP + group id → `setDeviceGroup`, sent over `device.attr.set`
+  with cluster 0x0004, key group_add/group_remove). Lets a light obey a hardware
+  zone-remote directly (MiBoxer FUT089Z zones = groups 101-108). Fire-and-forget
+  with a toast; the membership list + "refresh from device" is a later increment.
+
 - **Bind tab: Target picker.** The Add-binding form only collected source
   EP + cluster and sent no destination, which the firmware turned into a ZDO
   bind to IEEE `0x0` — a bind to nowhere. The form now has a Target select:

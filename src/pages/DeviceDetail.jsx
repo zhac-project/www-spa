@@ -18,6 +18,7 @@ const TABS = [
     { id: "states",   label: "States"   },
     { id: "commands", label: "Commands" },
     { id: "bind",     label: "Bind"     },
+    { id: "groups",   label: "Groups"   },
     { id: "options",  label: "Options"  },
 ];
 
@@ -151,6 +152,7 @@ export function DeviceDetailPage() {
                     {tab === "states"   && <StatesTab   d={d} ieee={ieee} />}
                     {tab === "commands" && <CommandsTab d={d} ieee={ieee} />}
                     {tab === "bind"     && <BindTab     d={d} ieee={ieee} />}
+                    {tab === "groups"   && <GroupsTab   d={d} ieee={ieee} />}
                     {tab === "options"  && <OptionsTab  d={d} ieee={ieee} />}
 
                     <div class="dev-bottom-bar">
@@ -557,17 +559,17 @@ function BindTab({ d, ieee }) {
                 </table>
             )}
             <BindForm ieee={ieee} />
-            <GroupMembershipForm ieee={ieee} />
         </div>
     );
 }
 
-// Native ZCL Groups membership — add/remove this device (a light/controller)
-// to a Zigbee group id so it obeys commands sent to that group, including a
-// hardware zone-remote's groupcasts (MiBoxer FUT089Z: zones 1-8 = groups
-// 101-108). Fire-and-forget with ACK; the authoritative membership list +
+// Device Groups tab — native ZCL Groups membership. Add/remove this device to a
+// Zigbee group id so it obeys commands sent to that group, including a hardware
+// zone-remote's groupcasts (MiBoxer FUT089Z: zones 1-8 = groups 101-108). This
+// is device-side ZCL membership, DISTINCT from the synthetic Groups page (which
+// is gateway fan-out). Fire-and-forget with ACK; the tracked membership list +
 // "refresh from device" is a later increment.
-function GroupMembershipForm({ ieee }) {
+function GroupsTab({ ieee }) {
     const [ep, setEp] = useState(1);
     const [gid, setGid] = useState("");
     async function submit(remove) {
@@ -582,11 +584,13 @@ function GroupMembershipForm({ ieee }) {
         } catch (e) { showToast("Group " + (remove ? "remove" : "add") + " failed: " + e.message, "err"); }
     }
     return (
-        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="tab-panel">
             <h4 style="margin-bottom:8px;font-size:13px">ZCL group membership</h4>
-            <p class="field-hint" style="margin-bottom:8px">
-                Add this device to a Zigbee group so a hardware zone-remote can drive it
-                (e.g. MiBoxer FUT089Z zones = groups 101–108).
+            <p class="field-hint" style="margin-bottom:12px">
+                Join this device to a Zigbee group so a hardware zone-remote drives it
+                directly (e.g. MiBoxer FUT089Z zones = groups 101–108). This is native ZCL
+                membership on the device — separate from the <strong>Groups</strong> page in
+                the sidebar, which is gateway fan-out (one command re-sent to each member).
             </p>
             <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
                    style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>

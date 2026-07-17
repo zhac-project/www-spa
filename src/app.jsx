@@ -33,7 +33,7 @@ function ensureBootstrap() { if (!booted) { booted = true; wireBootstrap(); } }
 const NAV = [
     { id: "info",     label: "Info" },
     { id: "devices",  label: "Devices" },
-    { id: "groups",   label: "Groups" },
+    { id: "groups",   label: "Collections" },
     { id: "rules",    label: "Rules" },
     { id: "scripts",  label: "Scripts" },
     { id: "log",      label: "Log" },

@@ -8,6 +8,15 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Changed
+
+- **Sidebar "Groups" renamed to "Collections".** The synthetic gateway-fan-out
+  feature (a named set of devices that one command is re-sent to) is now
+  "Collections", freeing the precise term "Groups" for native ZCL group
+  membership (the device Groups tab). UI label only — the `group.*` WS/REST API,
+  routes, and `zhac_grp` NVS namespace are unchanged, so there is no migration
+  and no API break.
+
 ### Added
 
 - **Device page: dedicated Groups tab (native ZCL membership).** A new "Groups"
@@ -15,7 +24,7 @@ across the ZHAC platform.
   group id → `setDeviceGroup`, sent over `device.attr.set` with cluster 0x0004,
   key group_add/group_remove). Lets a light obey a hardware zone-remote directly
   (MiBoxer FUT089Z zones = groups 101-108). The tab copy notes this is native ZCL
-  membership on the device, distinct from the sidebar Groups page (gateway
+  membership on the device, distinct from the sidebar Collections page (gateway
   fan-out). Fire-and-forget with a toast; the membership list + "refresh from
   device" is a later increment.
 

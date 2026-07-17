@@ -31,12 +31,12 @@ export function GroupsPage() {
     async function doCreate() {
         const name = (newName || "").trim();
         if (!name) return;
-        const ok = await withToast(() => createGroup({ name }), "Group created", "Create failed");
+        const ok = await withToast(() => createGroup({ name }), "Collection created", "Create failed");
         if (ok === SUCCESS) { setCreating(false); setNewName(""); refresh(); }
     }
 
     async function removeGroup(g) {
-        if (!confirm(`Delete group "${g.name}" (id ${g.id})?`)) return;
+        if (!confirm(`Delete collection "${g.name}" (id ${g.id})?`)) return;
         const ok = await withToast(() => delGroupCall(g.id), "Deleted", "Delete failed");
         if (ok === SUCCESS) refresh();
     }
@@ -59,7 +59,7 @@ export function GroupsPage() {
         if (!ieee) return;
         const members = g.members || [];
         if (members.length >= MAX_MEMBERS) {
-            showToast(`Group is full (${MAX_MEMBERS} members max)`, "err");
+            showToast(`Collection is full (${MAX_MEMBERS} members max)`, "err");
             return;
         }
         const ok = await withToast(
@@ -72,11 +72,11 @@ export function GroupsPage() {
         <div class="page">
             <div class="toolbar">
                 <button onClick={() => bootstrapGroups().catch(e => showToast(e.message, "err"))}>Refresh</button>
-                <button class="primary" onClick={() => setCreating(true)}>+ New Group</button>
+                <button class="primary" onClick={() => setCreating(true)}>+ New Collection</button>
             </div>
 
             {groups.value.length === 0 ? (
-                <p class="empty-text">No groups yet.</p>
+                <p class="empty-text">No collections yet.</p>
             ) : (
                 <div id="groups-container">
                     {groups.value.map(g => (
@@ -116,7 +116,7 @@ export function GroupsPage() {
             )}
 
             <Modal open={creating}
-                   title="New Group"
+                   title="New Collection"
                    onClose={() => setCreating(false)}
                    footer={<>
                        <button onClick={() => setCreating(false)}>Cancel</button>
@@ -125,7 +125,9 @@ export function GroupsPage() {
                 <label class="field-label">Name</label>
                 <input class="field-input" value={newName}
                        onInput={(e) => setNewName(e.currentTarget.value)} />
-                <p class="field-hint">Add devices from the group card after creating.</p>
+                <p class="field-hint">A collection re-sends one command to every member (gateway
+                    fan-out). For hardware zone-remotes, use a device's Groups tab instead.
+                    Add devices from the collection card after creating.</p>
             </Modal>
         </div>
     );

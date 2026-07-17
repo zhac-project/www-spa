@@ -589,8 +589,8 @@ function GroupsTab({ ieee }) {
             <p class="field-hint" style="margin-bottom:12px">
                 Join this device to a Zigbee group so a hardware zone-remote drives it
                 directly (e.g. MiBoxer FUT089Z zones = groups 101–108). This is native ZCL
-                membership on the device — separate from the <strong>Groups</strong> page in
-                the sidebar, which is gateway fan-out (one command re-sent to each member).
+                membership on the device — separate from the <strong>Collections</strong> page
+                in the sidebar, which is gateway fan-out (one command re-sent to each member).
             </p>
             <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
                    style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>

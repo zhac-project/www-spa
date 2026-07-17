@@ -564,9 +564,17 @@ function BindTab({ d, ieee }) {
 function BindForm({ ieee }) {
     const [ep, setEp] = useState(1);
     const [cluster, setCluster] = useState("0x0006");
+    // Target: "" = coordinator (reporting default — firmware substitutes its
+    // own IEEE + ep 1); anything else = direct device→device binding (e.g. a
+    // remote driving a bulb without a rule), sent as dst_ieee + dst_ep.
+    const [target, setTarget] = useState("");
+    const [dstEp, setDstEp] = useState(1);
+    const others = (devicesStore.value || []).filter(dv => dv.ieee !== ieee);
     async function submit() {
         try {
-            await bindDevice({ ieee, unbind: false, src_ep: Number(ep), cluster: parseInt(cluster, 16) });
+            const args = { ieee, unbind: false, src_ep: Number(ep), cluster: parseInt(cluster, 16) };
+            if (target) { args.dst_ieee = target; args.dst_ep = Number(dstEp) || 1; }
+            await bindDevice(args);
             showToast("Bind requested", "ok");
         } catch (e) { showToast("Bind failed: " + e.message, "err"); }
     }
@@ -577,6 +585,18 @@ function BindForm({ ieee }) {
                    style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>
             <label style="margin-right:10px">Cluster <input value={cluster}
                    style="width:80px" onInput={(e) => setCluster(e.currentTarget.value)} /></label>
+            <label style="margin-right:10px">Target{" "}
+                <select value={target} onChange={(e) => setTarget(e.currentTarget.value)}>
+                    <option value="">Coordinator (reporting)</option>
+                    {others.map(dv => (
+                        <option key={dv.ieee} value={dv.ieee}>{dv.name || dv.ieee}</option>
+                    ))}
+                </select></label>
+            {target && (
+                <label style="margin-right:10px">Target EP <input type="number" value={dstEp}
+                       min="1" max="240" style="width:60px"
+                       onInput={(e) => setDstEp(e.currentTarget.value)} /></label>
+            )}
             <button class="primary small" onClick={submit}>Bind</button>
         </div>
     );

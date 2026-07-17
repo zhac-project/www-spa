@@ -10,6 +10,14 @@ across the ZHAC platform.
 
 ### Added
 
+- **Bind tab: Target picker.** The Add-binding form only collected source
+  EP + cluster and sent no destination, which the firmware turned into a ZDO
+  bind to IEEE `0x0` — a bind to nowhere. The form now has a Target select:
+  "Coordinator (reporting)" (default — firmware substitutes its own IEEE +
+  ep 1) or any other paired device + target EP for direct device→device
+  bindings (remote → bulb without a rule). Requires the paired
+  `zhac-main-core` coordinator-default fix for the coordinator option.
+
 - **Groups: add-member control.** Each group card now has a device picker +
   Add button (devices not already members; `ep` defaults to 1, matching the
   command fan-out and the firmware member parser), with a client-side cap at

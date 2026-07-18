@@ -109,6 +109,8 @@ export async function bindDevice(args) {
 export async function deviceGroupsList(ieee)           { return call("device.groups.list",   { ieee }); }
 export async function deviceGroupsAdd(ieee, ep, gid)    { return call("device.groups.add",    { ieee, ep, gid }); }
 export async function deviceGroupsRemove(ieee, ep, gid) { return call("device.groups.remove", { ieee, ep, gid }); }
+// Authoritative refresh: reads the device's real ZCL group table + reconciles.
+export async function deviceGroupsRefresh(ieee, ep)    { return call("device.groups.refresh", { ieee, ep }); }
 
 // ── Event fan-in ────────────────────────────────────────────────────────
 

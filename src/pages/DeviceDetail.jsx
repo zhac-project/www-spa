@@ -8,7 +8,7 @@ import { useEffect, useState } from "preact/hooks";
 import { ui, navigate, showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { getDevice, renameDevice, reinterviewDevice, configureDevice,
          deleteDevice, setDeviceAttr, bindDevice,
-         deviceGroupsList, deviceGroupsAdd, deviceGroupsRemove } from "../stores/devices.js";
+         deviceGroupsList, deviceGroupsAdd, deviceGroupsRemove, deviceGroupsRefresh } from "../stores/devices.js";
 import { devices as devicesStore } from "../stores/devices.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
@@ -596,6 +596,12 @@ function GroupsTab({ ieee }) {
         catch (e) { showToast("Remove failed: " + e.message, "err"); }
         finally { setBusy(false); }
     }
+    async function refreshFromDevice() {
+        setBusy(true);
+        try { const r = await deviceGroupsRefresh(ieee, Number(ep) || 1); setGroups(r?.groups || []); showToast("Refreshed from device", "ok"); }
+        catch (e) { showToast("Refresh failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
     return (
         <div class="tab-panel">
             <h4 style="margin-bottom:8px;font-size:13px">ZCL group membership</h4>
@@ -619,7 +625,9 @@ function GroupsTab({ ieee }) {
                    placeholder="101" style="width:90px"
                    onInput={(e) => setGid(e.currentTarget.value)} /></label>
             <button class="primary small" disabled={busy} onClick={add}>Add</button>
-            <span class="field-hint" style="margin-left:10px">Tracked list — reflects what ZHAC provisioned.</span>
+            <button class="small" style="margin-left:6px" disabled={busy}
+                    onClick={refreshFromDevice} title="Query the device's real ZCL group table">Refresh from device</button>
+            <span class="field-hint" style="margin-left:10px">Tracked list; “Refresh” reads the device's real table.</span>
         </div>
     );
 }

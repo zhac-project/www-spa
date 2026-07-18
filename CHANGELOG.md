@@ -8,6 +8,13 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Added
+
+- **Device Groups tab: live membership list.** The Groups tab now loads and shows
+  the device's tracked ZCL group membership as chips (each with a remove ×), via
+  the dedicated `device.groups.list/add/remove` API (replacing the increment-1
+  `device.attr.set` overload). Each add/remove returns the updated list.
+
 ### Changed
 
 - **Sidebar "Groups" renamed to "Collections".** The synthetic gateway-fan-out

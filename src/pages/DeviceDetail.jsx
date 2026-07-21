@@ -719,6 +719,13 @@ function RainMakerExposeControl({ ieee }) {
     const [devices, setDevices] = useState(null);   // null = not loaded; else device.rainmaker.list().devices
     const [loadErr, setLoadErr] = useState(false);
     const [busy, setBusy]       = useState(false);
+    // Optimistic local override, same idiom as AttrBoolRow above: null =
+    // follow `devices`, non-null = we just clicked and are waiting on the
+    // add/remove round-trip. Without this the controlled checkbox snaps
+    // back to its old value the instant `busy` triggers a re-render (the
+    // click already flipped the native control), then jumps again once
+    // the response lands.
+    const [localExposed, setLocalExposed] = useState(null);
 
     useEffect(() => {
         let alive = true;
@@ -793,10 +800,11 @@ function RainMakerExposeControl({ ieee }) {
     }
 
     const entry = devices.find(x => normIeee(x.ieee) === normIeee(ieee));
-    const exposed = !!entry;
+    const exposed = localExposed !== null ? localExposed : !!entry;
 
     async function onToggle(e) {
         const next = e.currentTarget.checked;
+        setLocalExposed(next);      // flip UI immediately
         setBusy(true);
         let res;
         const ok = await withToast(
@@ -806,6 +814,9 @@ function RainMakerExposeControl({ ieee }) {
         // Use the add/remove response's own list rather than re-fetching —
         // fewer round-trips and no race with a stale re-fetch.
         if (ok === SUCCESS) setDevices(res?.devices || []);
+        setLocalExposed(null);      // hand back to derived state either way
+                                     // (success: reflects the fresh list;
+                                     // failure: reverts to the pre-click value)
         setBusy(false);
     }
 
@@ -818,7 +829,7 @@ function RainMakerExposeControl({ ieee }) {
                     <span class="toggle-slider"></span>
                 </label>
                 <span>{exposed ? "Exposed to RainMaker" : "Not exposed to RainMaker"}</span>
-                {exposed && entry.type && <span class="ro-tag">{entry.type}</span>}
+                {exposed && entry?.type && <span class="ro-tag">{entry.type}</span>}
             </div>
             <p class="tab-hint">
                 Bridges this device into your RainMaker account as a virtual node

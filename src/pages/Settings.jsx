@@ -5,7 +5,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
 import { status } from "../stores/status.js";
-import { showToast, navigate, themeMode, setTheme } from "../stores/ui.js";
+import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
+import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
@@ -162,6 +163,8 @@ export function SettingsPage() {
                     </button>
                 </Card>
 
+                <UplinkCard />
+
                 <Card title="Zigbee network">
                     <label>Channel
                         <select value={ch} onChange={(e) => setCh(Number(e.currentTarget.value))}>
@@ -219,6 +222,196 @@ export function SettingsPage() {
                 {d.remote_available && <RemoteCard />}
             </div>
         </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Uplink selector + RainMaker card — chooses which cloud agent runs: none,
+// the existing custom-MQTT gateway (MQTT card above), or the RainMaker
+// bridge (Tasks 9-18, firmware side). RainMakerCard mirrors RemoteCard's
+// poll-on-mount pattern below (setTimeout tick loop + `alive` flag) rather
+// than a new mechanism — this project has flagged stacked-interval bugs
+// before.
+// ---------------------------------------------------------------------------
+
+const UPLINK_OPTIONS = [
+    { value: "none",        label: "None" },
+    { value: "custom_mqtt", label: "Custom MQTT" },
+    { value: "rainmaker",   label: "RainMaker" },
+];
+
+function uplinkLabel(v) {
+    return UPLINK_OPTIONS.find(o => o.value === v)?.label || v;
+}
+
+function UplinkCard() {
+    const [mode, setMode] = useState(null);      // null while loading
+    const [rebootNotice, setRebootNotice] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const res = await uplinkGet();
+                if (alive) setMode(res?.uplink ?? "none");
+            } catch (_) { /* leave null — radios render unselected */ }
+        })();
+        return () => { alive = false; };
+    }, []);
+
+    async function change(next) {
+        if (next === mode || busy) return;
+        if (!confirm(`Switch cloud uplink to "${uplinkLabel(next)}"? The other connection stops.`)) return;
+        setBusy(true);
+        try {
+            const res = await uplinkSet(next);
+            setMode(res?.uplink ?? next);
+            setRebootNotice(!!res?.reboot_required);
+            showToast("Uplink set to " + uplinkLabel(res?.uplink ?? next), "ok");
+        } catch (e) {
+            showToast("Failed: " + e.message, "err");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <>
+            <Card title="Uplink">
+                <div class="theme-radio-group" role="radiogroup" aria-label="Cloud uplink">
+                    {UPLINK_OPTIONS.map((o) => (
+                        <label key={o.value} class="theme-radio">
+                            <input
+                                type="radio"
+                                name="uplink"
+                                value={o.value}
+                                checked={mode === o.value}
+                                disabled={busy || mode === null}
+                                onChange={() => change(o.value)}
+                            />
+                            <span class="theme-radio-label">{o.label}</span>
+                        </label>
+                    ))}
+                </div>
+                <p class="field-hint">
+                    Only one cloud uplink runs at a time. Switching stops the other connection.
+                </p>
+                {rebootNotice && (
+                    <div class="field-hint" style="margin-top:8px;color:var(--warn)">
+                        Reboot required to fully stop the RainMaker agent — the SDK can't be
+                        de-initialised at runtime, so it keeps running in the background until
+                        the device reboots.
+                    </div>
+                )}
+            </Card>
+            {mode === "rainmaker" && <RainMakerCard />}
+        </>
+    );
+}
+
+const RAINMAKER_STATE_BADGE = {
+    disabled:     { kind: null,   label: "Disabled" },
+    init_claim:   { kind: "warn", label: "Claiming node…" },
+    connecting:   { kind: "warn", label: "Connecting" },
+    unassociated: { kind: "warn", label: "Unassociated" },
+    ready:        { kind: "ok",   label: "Ready" },
+    backoff:      { kind: "warn", label: "Retrying…" },
+    claim_failed: { kind: "err",  label: "Claim failed" },
+};
+
+function RainMakerStateBadge({ state }) {
+    const entry = RAINMAKER_STATE_BADGE[state] || { kind: null, label: state || "—" };
+    if (!entry.kind) return <span class="muted">{entry.label}</span>;
+    return <Badge kind={entry.kind}>{entry.label}</Badge>;
+}
+
+function RainMakerCard() {
+    const [st, setSt] = useState(null);           // rainmaker.status response
+    const [userId, setUserId] = useState("");
+    const [secret, setSecret] = useState("");
+    const [assocBusy, setAssocBusy] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        let t;
+
+        async function tick() {
+            try {
+                const res = await rainmakerStatus();
+                if (alive) setSt(res);
+            } catch (_) {}
+            if (alive) t = setTimeout(tick, 5000);
+        }
+
+        tick();
+        return () => { alive = false; clearTimeout(t); };
+    }, []);
+
+    async function copyNodeId() {
+        try {
+            await navigator.clipboard.writeText(st?.node_id || "");
+            showToast("Node ID copied", "ok");
+        } catch (_) {
+            showToast("Clipboard unavailable — select and copy manually", "err");
+        }
+    }
+
+    async function doAssoc(e) {
+        e.preventDefault();
+        if (!userId.trim() || !secret.trim() || assocBusy) return;
+        setAssocBusy(true);
+        const ok = await withToast(
+            () => rainmakerAssoc(userId.trim(), secret.trim()),
+            "Association saved — claiming node…", "Association failed");
+        setAssocBusy(false);
+        if (ok === SUCCESS) setSecret("");
+    }
+
+    const state = st?.state;
+    const needsAssoc = state === "unassociated" || state === "claim_failed";
+
+    return (
+        <Card title="RainMaker">
+            <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <RainMakerStateBadge state={state} />
+            </div>
+            <dl class="info-dl">
+                <dt>Node ID</dt>
+                <dd style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <code class="mono">{st?.node_id || "—"}</code>
+                    {st?.node_id && (
+                        <button type="button" class="small" onClick={copyNodeId}>Copy</button>
+                    )}
+                </dd>
+                <dt>Devices bridged</dt>
+                <dd>{st?.devices ?? "—"}</dd>
+            </dl>
+
+            {needsAssoc && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <p class="field-hint">
+                        Run <code class="mono">test --addnode &lt;node_id&gt;</code> from the
+                        RainMaker CLI using the Node ID above, then paste the resulting user ID
+                        and secret here.
+                    </p>
+                    <form onSubmit={doAssoc}>
+                        <label>User ID
+                            <input type="text" value={userId} autocomplete="off"
+                                   onInput={(e) => setUserId(e.currentTarget.value)} />
+                        </label>
+                        <label>Secret
+                            <input type="password" value={secret} autocomplete="off"
+                                   onInput={(e) => setSecret(e.currentTarget.value)} />
+                        </label>
+                        <button type="submit" class="primary small" disabled={assocBusy}>
+                            {assocBusy ? "Associating…" : state === "claim_failed" ? "Retry" : "Associate"}
+                        </button>
+                    </form>
+                </>
+            )}
+        </Card>
     );
 }
 

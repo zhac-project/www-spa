@@ -246,19 +246,40 @@ function uplinkLabel(v) {
 
 function UplinkCard() {
     const [mode, setMode] = useState(null);      // null while loading
+    const [loadErr, setLoadErr] = useState(false);
     const [rebootNotice, setRebootNotice] = useState(false);
     const [busy, setBusy] = useState(false);
 
+    // uplinkGet() can race the WS handshake (client.js authenticates on
+    // 'open' before any command is safe to send) and reject with "not
+    // connected" — a fire-once fetch would then leave `mode` null forever
+    // with the radios stuck disabled and no feedback. Retry on the same
+    // recursive-setTimeout cadence RainMakerCard/RemoteCard use below so
+    // this card self-heals the same way they do.
     useEffect(() => {
         let alive = true;
-        (async () => {
+        let t;
+
+        async function tick() {
             try {
                 const res = await uplinkGet();
-                if (alive) setMode(res?.uplink ?? "none");
-            } catch (_) { /* leave null — radios render unselected */ }
-        })();
-        return () => { alive = false; };
+                if (alive) { setMode(res?.uplink ?? "none"); setLoadErr(false); }
+            } catch (_) {
+                if (alive) setLoadErr(true);
+            }
+            if (alive) t = setTimeout(tick, 5000);
+        }
+
+        tick();
+        return () => { alive = false; clearTimeout(t); };
     }, []);
+
+    function retryLoad() {
+        uplinkGet().then(
+            (res) => { setMode(res?.uplink ?? "none"); setLoadErr(false); },
+            () => setLoadErr(true),
+        );
+    }
 
     async function change(next) {
         if (next === mode || busy) return;
@@ -294,6 +315,16 @@ function UplinkCard() {
                         </label>
                     ))}
                 </div>
+                {mode === null && (
+                    loadErr ? (
+                        <div class="field-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--danger)">
+                            <span>Couldn't read uplink setting.</span>
+                            <button type="button" class="small" onClick={retryLoad}>Retry</button>
+                        </div>
+                    ) : (
+                        <p class="muted" style="font-size:12px">Loading current setting…</p>
+                    )
+                )}
                 <p class="field-hint">
                     Only one cloud uplink runs at a time. Switching stops the other connection.
                 </p>

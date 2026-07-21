@@ -400,7 +400,15 @@ function RainMakerCard() {
     }
 
     const state = st?.state;
-    const needsAssoc = state === "unassociated" || state === "claim_failed";
+    // Task 21 fix: claim_failed used to fall into needsAssoc too, showing
+    // the association form with its submit button relabeled "Retry" — but
+    // rainmaker_gw_assoc_start() (firmware) unconditionally rejects with
+    // ESP_ERR_INVALID_STATE while claim_failed (no live agent to hand a
+    // mapping request to; see rainmaker_gw.h's own doc comment), so that
+    // button could never succeed. Association only makes sense once a
+    // claim has actually gone through, i.e. unassociated.
+    const needsAssoc = state === "unassociated";
+    const claimFailed = state === "claim_failed";
 
     return (
         <Card title="RainMaker">
@@ -437,9 +445,20 @@ function RainMakerCard() {
                                    onInput={(e) => setSecret(e.currentTarget.value)} />
                         </label>
                         <button type="submit" class="primary small" disabled={assocBusy}>
-                            {assocBusy ? "Associating…" : state === "claim_failed" ? "Retry" : "Associate"}
+                            {assocBusy ? "Associating…" : "Associate"}
                         </button>
                     </form>
+                </>
+            )}
+            {claimFailed && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <div class="field-hint" style="color:var(--danger)">
+                        Node claim failed — the device could not register with the RainMaker
+                        cloud. Check the device log for the specific reason. Claiming only runs
+                        once at startup, so reboot the device to retry; association becomes
+                        available again only after a successful claim.
+                    </div>
                 </>
             )}
         </Card>

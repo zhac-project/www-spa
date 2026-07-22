@@ -6,7 +6,8 @@
 // ZHAC node (rainmaker.status, rainmaker.assoc.set, ...); this one never
 // touches the node or the WS link — it's a straight browser-to-Espressif
 // conversation. See design doc RAINMAKER_BRIDGE_DESIGN.md §10 "Onboarding
-// v2 — one-click association from the web UI (Flow A)".
+// v2 — one-click association from the web UI (Flow A)" and its "Disconnect
+// (unlink account)" counterpart.
 //
 // CORS confirmed open 2026-07-22 (Access-Control-Allow-Origin: *,
 // Authorization allowed, GET/PUT/POST permitted) on login2, user and
@@ -22,6 +23,11 @@
 //     accesstoken)
 //   - which /v1/user field carries the user_id the node must publish
 //   - what a real MFA/challenge response looks like
+//   - whether unmapping takes the same PUT shape as mapping, just with
+//     operation:"remove" (what's coded below), or needs a different verb —
+//     e.g. DELETE /v1/user/nodes/mapping?node_id=...&user_id=... — the CLI's
+//     `removenode` command proves the operation exists, not the exact wire
+//     contract a browser must use; see rmCloudUnmap
 
 const RM_API = "https://api.rainmaker.espressif.com/v1";
 
@@ -124,6 +130,27 @@ export async function rmCloudMap(nodeId, secret, token) {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: token },
         body: JSON.stringify({ node_id: nodeId, secret_key: secret, operation: "add" }),
+    });
+    const body = await parseJsonSafe(res);
+    if (!res.ok) throw new Error(apiErrorMessage(body, res.status));
+    return body;
+}
+
+// PUT /v1/user/nodes/mapping — reverse of rmCloudMap: unlink `nodeId` from
+// the signed-in cloud account so it drops off that user's RainMaker app.
+// Mirrors the proven operation:"add" shape (Gate 3) with operation:"remove"
+// in its place; no secret_key needed for a removal. UNVERIFIED against a
+// real account (see module header) — the RainMaker CLI's `removenode`
+// command does this same job, so the operation itself is knowable, but
+// whether the HTTP API accepts it as PUT .../mapping {operation:"remove"}
+// or wants a DELETE with query params instead needs confirming. Defensive
+// either way: a non-2xx response surfaces the API's own error message
+// (apiErrorMessage) rather than assuming a shape and failing silently.
+export async function rmCloudUnmap(nodeId, token) {
+    const res = await rmFetch(`${RM_API}/user/nodes/mapping`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify({ node_id: nodeId, operation: "remove" }),
     });
     const body = await parseJsonSafe(res);
     if (!res.ok) throw new Error(apiErrorMessage(body, res.status));

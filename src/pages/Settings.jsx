@@ -7,7 +7,7 @@ import { call } from "../ws/client.js";
 import { status } from "../stores/status.js";
 import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
 import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
-import { rmCloudLogin, rmCloudUser, rmCloudMap } from "../stores/rainmaker-cloud.js";
+import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
@@ -376,13 +376,18 @@ function RainMakerCard() {
     const [assocBusy, setAssocBusy] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
-    // One-click cloud connect — design doc §10 "Onboarding v2 / Flow A".
-    // The password only ever lives in this component's state, only for as
-    // long as it takes to sign in to Espressif; the RainMaker token lives
-    // only in a local variable inside doCloudConnect below (never React
-    // state, so it never even reaches a re-render or devtools inspector),
-    // discarded the moment the mapping call finishes. Neither is ever
-    // written to localStorage, sent to the node, or logged.
+    // One-click cloud connect/disconnect — design doc §10 "Onboarding v2 /
+    // Flow A" (connect) and its "Disconnect (unlink account)" counterpart.
+    // Connect and Disconnect share this email/password/token handling
+    // because both need a fresh sign-in (the token is never kept around) —
+    // only one of the two forms below is ever visible at a time, so sharing
+    // is safe. The password only ever lives in this component's state, only
+    // for as long as it takes to sign in to Espressif; the RainMaker token
+    // lives only in a local variable inside doCloudConnect/doCloudDisconnect
+    // below (never React state, so it never even reaches a re-render or
+    // devtools inspector), discarded the moment the mapping/unmapping call
+    // finishes. Neither is ever written to localStorage, sent to the node,
+    // or logged.
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [connecting, setConnecting] = useState(false);
@@ -469,6 +474,37 @@ function RainMakerCard() {
         });
     }
 
+    // Disconnect's counterpart to waitForReady, inverted: after the unmap
+    // call succeeds, the cloud pushes MAPPING_RESET to the node
+    // asynchronously, so the flip away from "ready" can lag a few seconds.
+    // Unlike waitForReady this never rejects — the unmap call already
+    // succeeded by the time this runs, so a slow status flip is "still
+    // working," not a failure. Resolves true if the flip was observed
+    // before the bound, false on timeout (or if polling itself keeps
+    // erroring), so the caller can report success either way and just vary
+    // the message.
+    function waitForUnassociated(maxAttempts = 24) { // 24 * 5s ≈ 2 min
+        return new Promise((resolve) => {
+            let attempts = 0;
+            function tick() {
+                if (unmountedRef.current) { resolve(false); return; }
+                rainmakerStatus().then((res) => {
+                    if (unmountedRef.current) { resolve(false); return; }
+                    setSt(res);
+                    if (res?.state !== "ready") { resolve(true); return; }
+                    attempts += 1;
+                    if (attempts >= maxAttempts) { resolve(false); return; }
+                    setTimeout(tick, 5000);
+                }).catch(() => {
+                    attempts += 1;
+                    if (unmountedRef.current || attempts >= maxAttempts) { resolve(false); return; }
+                    setTimeout(tick, 5000);
+                });
+            }
+            tick();
+        });
+    }
+
     async function doCloudConnect(e) {
         e.preventDefault();
         if (connecting || !email.trim() || !password) return;
@@ -511,6 +547,55 @@ function RainMakerCard() {
         }
     }
 
+    // Reverse of doCloudConnect — design doc §10 "Disconnect (unlink
+    // account)". Unlinking removes the user-node mapping only: the node
+    // stays self-claimed and connected to RainMaker's cloud (same state as
+    // a freshly-claimed node), and the exposed-device set in NVS is left
+    // alone, so reconnecting later restores the same device selections. We
+    // don't keep the RainMaker token, so unlinking re-authenticates with
+    // the password exactly like connecting did — same fields, same
+    // never-store handling, same clear-on-finally.
+    async function doCloudDisconnect(e) {
+        e.preventDefault();
+        if (connecting || !email.trim() || !password) return;
+        if (!st?.node_id) { showToast("Node ID not loaded yet — wait a moment and retry", "err"); return; }
+        if (!confirm("Unlink this hub from your RainMaker account? It will disappear from the RainMaker app. Your device selections and the RainMaker uplink are kept — reconnect anytime.")) return;
+
+        setConnecting(true);
+        setConnectError(null);
+        const signInEmail = email.trim();
+        let token = null;
+        try {
+            setStep("Signing in…");
+            const login = await rmCloudLogin(signInEmail, password);
+            token = login.token;
+            setPassword("");                          // no longer needed past this point
+
+            setStep("Unlinking…");
+            await rmCloudUnmap(st.node_id, token);
+
+            setStep("Finishing…");
+            const confirmed = await waitForUnassociated();
+
+            if (unmountedRef.current) return;
+            setConnectedEmail(null);
+            setEmail("");
+            showToast(confirmed
+                ? "Disconnected from RainMaker account."
+                : "Unlinked — the hub may take a moment to update.", "ok");
+        } catch (err) {
+            if (!unmountedRef.current) {
+                const msg = err?.message || String(err);
+                setConnectError(msg);
+                showToast("Disconnect failed: " + msg, "err");
+            }
+        } finally {
+            token = null;
+            if (!unmountedRef.current) { setConnecting(false); setStep(""); }
+            setPassword("");
+        }
+    }
+
     const state = st?.state;
     // Task 21 fix: claim_failed used to fall into needsAssoc too, showing
     // the association form with its submit button relabeled "Retry" — but
@@ -521,6 +606,13 @@ function RainMakerCard() {
     // claim has actually gone through, i.e. unassociated.
     const needsAssoc = state === "unassociated";
     const claimFailed = state === "claim_failed";
+    // Disconnect's counterpart to needsAssoc. "ready" from the node poll is
+    // the authoritative signal; connectedEmail (set right when a Connect
+    // finishes) covers the brief window before the next poll tick lands,
+    // but never wins over an authoritative "unassociated" status (e.g. the
+    // node was unmapped from the app itself) — needsAssoc and isConnected
+    // must never both be true.
+    const isConnected = state === "ready" || (!!connectedEmail && !needsAssoc);
 
     return (
         <Card title="RainMaker">
@@ -598,6 +690,34 @@ function RainMakerCard() {
                                 </button>
                             </form>
                         </>
+                    )}
+                </>
+            )}
+            {isConnected && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <p class="field-hint">
+                        Sign in again to unlink this hub from your RainMaker account — we don't
+                        keep your password or the RainMaker token, so unlinking needs a fresh
+                        sign-in, same as connecting did.
+                    </p>
+                    <form onSubmit={doCloudDisconnect}>
+                        <label>Email / username
+                            <input type="email" value={email} autocomplete="username"
+                                   disabled={connecting}
+                                   onInput={(e) => setEmail(e.currentTarget.value)} />
+                        </label>
+                        <label>Password
+                            <input type="password" value={password} autocomplete="current-password"
+                                   disabled={connecting}
+                                   onInput={(e) => setPassword(e.currentTarget.value)} />
+                        </label>
+                        <button type="submit" class="secondary small" disabled={connecting}>
+                            {connecting ? (step || "Disconnecting…") : "Disconnect"}
+                        </button>
+                    </form>
+                    {connectError && !connecting && (
+                        <p class="field-hint" style="color:var(--danger)">{connectError}</p>
                     )}
                 </>
             )}

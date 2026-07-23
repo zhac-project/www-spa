@@ -7,7 +7,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { ui, navigate, showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { getDevice, renameDevice, reinterviewDevice, configureDevice,
-         deleteDevice, setDeviceAttr, bindDevice, setDeviceGroup } from "../stores/devices.js";
+         deleteDevice, setDeviceAttr, bindDevice,
+         deviceGroupsList, deviceGroupsAdd, deviceGroupsRemove, deviceGroupsRefresh } from "../stores/devices.js";
 import { devices as devicesStore } from "../stores/devices.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
@@ -572,16 +573,34 @@ function BindTab({ d, ieee }) {
 function GroupsTab({ ieee }) {
     const [ep, setEp] = useState(1);
     const [gid, setGid] = useState("");
-    async function submit(remove) {
+    const [groups, setGroups] = useState(null);   // null = loading, [] = none
+    const [busy, setBusy] = useState(false);
+
+    async function load() {
+        try { const r = await deviceGroupsList(ieee); setGroups(r?.groups || []); }
+        catch (e) { setGroups([]); showToast("Load groups failed: " + e.message, "err"); }
+    }
+    useEffect(() => { setGroups(null); load(); }, [ieee]);
+
+    async function add() {
         const g = parseInt(gid, 10);
-        if (!Number.isInteger(g) || g < 1 || g > 65535) {
-            showToast("Enter a group id 1–65535", "err");
-            return;
-        }
-        try {
-            await setDeviceGroup(ieee, Number(ep) || 1, g, remove);
-            showToast(remove ? `Removed from group ${g}` : `Added to group ${g}`, "ok");
-        } catch (e) { showToast("Group " + (remove ? "remove" : "add") + " failed: " + e.message, "err"); }
+        if (!Number.isInteger(g) || g < 1 || g > 65535) { showToast("Enter a group id 1–65535", "err"); return; }
+        setBusy(true);
+        try { const r = await deviceGroupsAdd(ieee, Number(ep) || 1, g); setGroups(r?.groups || []); setGid(""); showToast(`Added to group ${g}`, "ok"); }
+        catch (e) { showToast("Add failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
+    async function remove(g) {
+        setBusy(true);
+        try { const r = await deviceGroupsRemove(ieee, Number(ep) || 1, g); setGroups(r?.groups || []); showToast(`Removed from group ${g}`, "ok"); }
+        catch (e) { showToast("Remove failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
+    async function refreshFromDevice() {
+        setBusy(true);
+        try { const r = await deviceGroupsRefresh(ieee, Number(ep) || 1); setGroups(r?.groups || []); showToast("Refreshed from device", "ok"); }
+        catch (e) { showToast("Refresh failed: " + e.message, "err"); }
+        finally { setBusy(false); }
     }
     return (
         <div class="tab-panel">
@@ -592,13 +611,23 @@ function GroupsTab({ ieee }) {
                 membership on the device — separate from the <strong>Collections</strong> page
                 in the sidebar, which is gateway fan-out (one command re-sent to each member).
             </p>
+            <div class="group-chips" style="margin-bottom:12px">
+                {groups === null ? <span class="muted">Loading…</span>
+                 : groups.length === 0 ? <span class="muted">Not in any group (tracked).</span>
+                 : groups.map(g => (
+                     <span key={g} class="chip">{g}
+                         <button title="Remove" disabled={busy} onClick={() => remove(g)}>×</button>
+                     </span>))}
+            </div>
             <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
                    style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>
             <label style="margin-right:10px">Group ID <input type="number" value={gid} min="1" max="65535"
                    placeholder="101" style="width:90px"
                    onInput={(e) => setGid(e.currentTarget.value)} /></label>
-            <button class="primary small" onClick={() => submit(false)}>Add</button>
-            <button class="small danger" style="margin-left:6px" onClick={() => submit(true)}>Remove</button>
+            <button class="primary small" disabled={busy} onClick={add}>Add</button>
+            <button class="small" style="margin-left:6px" disabled={busy}
+                    onClick={refreshFromDevice} title="Query the device's real ZCL group table">Refresh from device</button>
+            <span class="field-hint" style="margin-left:10px">Tracked list; “Refresh” reads the device's real table.</span>
         </div>
     );
 }

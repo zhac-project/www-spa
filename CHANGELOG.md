@@ -20,8 +20,6 @@ across the ZHAC platform.
   Collections (gateway fan-out) — this is the fleet-wide view of real ZCL
   groups (e.g. MiBoxer zone remotes).
 
-### Added
-
 - **Device Groups tab: live membership list.** The Groups tab now loads and shows
   the device's tracked ZCL group membership as chips (each with a remove ×), via
   the dedicated `device.groups.list/add/remove` API (replacing the increment-1

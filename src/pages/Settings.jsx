@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Settings: WiFi status/scan/connect/forget, MQTT, Zigbee network, misc toggles,
 // OTA inputs, danger-zone reset. Every action maps to a WS command.
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
 import { status } from "../stores/status.js";
-import { showToast, navigate, themeMode, setTheme } from "../stores/ui.js";
+import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
+import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
+import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
@@ -162,6 +164,8 @@ export function SettingsPage() {
                     </button>
                 </Card>
 
+                <UplinkCard />
+
                 <Card title="Zigbee network">
                     <label>Channel
                         <select value={ch} onChange={(e) => setCh(Number(e.currentTarget.value))}>
@@ -219,6 +223,516 @@ export function SettingsPage() {
                 {d.remote_available && <RemoteCard />}
             </div>
         </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Uplink selector + RainMaker card — chooses which cloud agent runs: none,
+// the existing custom-MQTT gateway (MQTT card above), or the RainMaker
+// bridge (Tasks 9-18, firmware side). RainMakerCard mirrors RemoteCard's
+// poll-on-mount pattern below (setTimeout tick loop + `alive` flag) rather
+// than a new mechanism — this project has flagged stacked-interval bugs
+// before.
+// ---------------------------------------------------------------------------
+
+const UPLINK_OPTIONS = [
+    { value: "none",        label: "None" },
+    { value: "custom_mqtt", label: "Custom MQTT" },
+    { value: "rainmaker",   label: "RainMaker" },
+];
+
+function uplinkLabel(v) {
+    return UPLINK_OPTIONS.find(o => o.value === v)?.label || v;
+}
+
+function UplinkCard() {
+    const [mode, setMode] = useState(null);      // null while loading
+    const [loadErr, setLoadErr] = useState(false);
+    const [rebootNotice, setRebootNotice] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    // uplinkGet() can race the WS handshake (client.js authenticates on
+    // 'open' before any command is safe to send) and reject with "not
+    // connected" — a fire-once fetch would then leave `mode` null forever
+    // with the radios stuck disabled and no feedback. Retry on the same
+    // recursive-setTimeout cadence RainMakerCard/RemoteCard use below so
+    // this card self-heals the same way they do.
+    useEffect(() => {
+        let alive = true;
+        let t;
+
+        async function tick() {
+            try {
+                const res = await uplinkGet();
+                if (alive) { setMode(res?.uplink ?? "none"); setLoadErr(false); }
+            } catch (_) {
+                if (alive) setLoadErr(true);
+            }
+            if (alive) t = setTimeout(tick, 5000);
+        }
+
+        tick();
+        return () => { alive = false; clearTimeout(t); };
+    }, []);
+
+    function retryLoad() {
+        uplinkGet().then(
+            (res) => { setMode(res?.uplink ?? "none"); setLoadErr(false); },
+            () => setLoadErr(true),
+        );
+    }
+
+    async function change(next) {
+        if (next === mode || busy) return;
+        if (!confirm(`Switch cloud uplink to "${uplinkLabel(next)}"? The other connection stops.`)) return;
+        setBusy(true);
+        try {
+            const res = await uplinkSet(next);
+            setMode(res?.uplink ?? next);
+            setRebootNotice(!!res?.reboot_required);
+            showToast("Uplink set to " + uplinkLabel(res?.uplink ?? next), "ok");
+        } catch (e) {
+            showToast("Failed: " + e.message, "err");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <>
+            <Card title="Uplink">
+                <div class="theme-radio-group" role="radiogroup" aria-label="Cloud uplink">
+                    {UPLINK_OPTIONS.map((o) => (
+                        <label key={o.value} class="theme-radio">
+                            <input
+                                type="radio"
+                                name="uplink"
+                                value={o.value}
+                                checked={mode === o.value}
+                                disabled={busy || mode === null}
+                                onChange={() => change(o.value)}
+                            />
+                            <span class="theme-radio-label">{o.label}</span>
+                        </label>
+                    ))}
+                </div>
+                {mode === null && (
+                    loadErr ? (
+                        <div class="field-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--danger)">
+                            <span>Couldn't read uplink setting.</span>
+                            <button type="button" class="small" onClick={retryLoad}>Retry</button>
+                        </div>
+                    ) : (
+                        <p class="muted" style="font-size:12px">Loading current setting…</p>
+                    )
+                )}
+                <p class="field-hint">
+                    Only one cloud uplink runs at a time. Switching stops the other connection.
+                </p>
+                {rebootNotice && (
+                    <div class="field-hint" style="margin-top:8px;color:var(--warn)">
+                        Reboot required to fully stop the RainMaker agent — the SDK can't be
+                        de-initialised at runtime, so it keeps running in the background until
+                        the device reboots.
+                    </div>
+                )}
+            </Card>
+            {mode === "rainmaker" && <RainMakerCard />}
+        </>
+    );
+}
+
+const RAINMAKER_STATE_BADGE = {
+    disabled:     { kind: null,   label: "Disabled" },
+    init_claim:   { kind: "warn", label: "Claiming node…" },
+    connecting:   { kind: "warn", label: "Connecting" },
+    unassociated: { kind: "warn", label: "Unassociated" },
+    ready:        { kind: "ok",   label: "Ready" },
+    backoff:      { kind: "warn", label: "Retrying…" },
+    claim_failed: { kind: "err",  label: "Claim failed" },
+};
+
+function RainMakerStateBadge({ state }) {
+    const entry = RAINMAKER_STATE_BADGE[state] || { kind: null, label: state || "—" };
+    if (!entry.kind) return <span class="muted">{entry.label}</span>;
+    return <Badge kind={entry.kind}>{entry.label}</Badge>;
+}
+
+// 32 hex chars (128 bits) of node-mapping secret for the one-click flow
+// below. crypto.getRandomValues, never Math.random — this value round-trips
+// through both the node (rainmaker.assoc.set, WS) and Espressif's cloud
+// (nodes/mapping PUT) as the shared secret proving the mapping request is
+// legitimate.
+function randomHex32() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function RainMakerCard() {
+    const [st, setSt] = useState(null);           // rainmaker.status response
+    const [userId, setUserId] = useState("");
+    const [secret, setSecret] = useState("");
+    const [assocBusy, setAssocBusy] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+
+    // One-click cloud connect/disconnect — design doc §10 "Onboarding v2 /
+    // Flow A" (connect) and its "Disconnect (unlink account)" counterpart.
+    // Connect and Disconnect share this email/password/token handling
+    // because both need a fresh sign-in (the token is never kept around) —
+    // only one of the two forms below is ever visible at a time, so sharing
+    // is safe. The password only ever lives in this component's state, only
+    // for as long as it takes to sign in to Espressif; the RainMaker token
+    // lives only in a local variable inside doCloudConnect/doCloudDisconnect
+    // below (never React state, so it never even reaches a re-render or
+    // devtools inspector), discarded the moment the mapping/unmapping call
+    // finishes. Neither is ever written to localStorage, sent to the node,
+    // or logged.
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [connecting, setConnecting] = useState(false);
+    const [step, setStep] = useState("");
+    const [connectError, setConnectError] = useState(null);
+    const [connectedEmail, setConnectedEmail] = useState(null);
+    const unmountedRef = useRef(false);
+
+    useEffect(() => {
+        let alive = true;
+        let t;
+
+        async function tick() {
+            try {
+                const res = await rainmakerStatus();
+                if (alive) setSt(res);
+            } catch (_) {}
+            if (alive) t = setTimeout(tick, 5000);
+        }
+
+        tick();
+        return () => { alive = false; clearTimeout(t); };
+    }, []);
+
+    // Belt-and-braces: drop the password on unmount too (navigating away
+    // mid-flow), on top of the clears already in doCloudConnect below.
+    useEffect(() => {
+        unmountedRef.current = false;
+        return () => { unmountedRef.current = true; setPassword(""); };
+    }, []);
+
+    async function copyNodeId() {
+        try {
+            await navigator.clipboard.writeText(st?.node_id || "");
+            showToast("Node ID copied", "ok");
+        } catch (_) {
+            showToast("Clipboard unavailable — select and copy manually", "err");
+        }
+    }
+
+    async function doAssoc(e) {
+        e.preventDefault();
+        if (!userId.trim() || !secret.trim() || assocBusy) return;
+        setAssocBusy(true);
+        const ok = await withToast(
+            () => rainmakerAssoc(userId.trim(), secret.trim()),
+            "Association saved — claiming node…", "Association failed");
+        setAssocBusy(false);
+        if (ok === SUCCESS) setSecret("");
+    }
+
+    // Bounded recursive-setTimeout wait for rainmaker.status to report
+    // "ready" after the cloud mapping call — the same idiom as the poll
+    // above (and RemoteCard's), just wrapped as a promise so
+    // doCloudConnect() can await it inline. Deliberately NOT a second
+    // ongoing setInterval: it self-terminates on success, on timeout, or if
+    // the card unmounts, and it feeds the same `st` state the badge/dl
+    // above already render from.
+    function waitForReady(maxAttempts = 24) { // 24 * 5s ≈ 2 min
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            function tick() {
+                if (unmountedRef.current) { reject(new Error("cancelled")); return; }
+                rainmakerStatus().then((res) => {
+                    if (unmountedRef.current) { reject(new Error("cancelled")); return; }
+                    setSt(res);
+                    if (res?.state === "ready") { resolve(res); return; }
+                    attempts += 1;
+                    if (attempts >= maxAttempts) {
+                        reject(new Error("Timed out waiting for the node to confirm — check its status below"));
+                        return;
+                    }
+                    setTimeout(tick, 5000);
+                }).catch(() => {
+                    attempts += 1;
+                    if (unmountedRef.current || attempts >= maxAttempts) {
+                        reject(new Error("Timed out waiting for the node to confirm — check its status below"));
+                        return;
+                    }
+                    setTimeout(tick, 5000);
+                });
+            }
+            tick();
+        });
+    }
+
+    // Disconnect's counterpart to waitForReady, inverted: after the unmap
+    // call succeeds, the cloud pushes MAPPING_RESET to the node
+    // asynchronously, so the flip away from "ready" can lag a few seconds.
+    // Unlike waitForReady this never rejects — the unmap call already
+    // succeeded by the time this runs, so a slow status flip is "still
+    // working," not a failure. Resolves true if the flip was observed
+    // before the bound, false on timeout (or if polling itself keeps
+    // erroring), so the caller can report success either way and just vary
+    // the message.
+    function waitForUnassociated(maxAttempts = 24) { // 24 * 5s ≈ 2 min
+        return new Promise((resolve) => {
+            let attempts = 0;
+            function tick() {
+                if (unmountedRef.current) { resolve(false); return; }
+                rainmakerStatus().then((res) => {
+                    if (unmountedRef.current) { resolve(false); return; }
+                    setSt(res);
+                    if (res?.state !== "ready") { resolve(true); return; }
+                    attempts += 1;
+                    if (attempts >= maxAttempts) { resolve(false); return; }
+                    setTimeout(tick, 5000);
+                }).catch(() => {
+                    attempts += 1;
+                    if (unmountedRef.current || attempts >= maxAttempts) { resolve(false); return; }
+                    setTimeout(tick, 5000);
+                });
+            }
+            tick();
+        });
+    }
+
+    async function doCloudConnect(e) {
+        e.preventDefault();
+        if (connecting || !email.trim() || !password) return;
+        if (!st?.node_id) { showToast("Node ID not loaded yet — wait a moment and retry", "err"); return; }
+
+        setConnecting(true);
+        setConnectError(null);
+        const signInEmail = email.trim();
+        let token = null;
+        try {
+            setStep("Signing in…");
+            const login = await rmCloudLogin(signInEmail, password);
+            token = login.token;
+            setPassword("");                          // no longer needed past this point
+
+            const { userId: cloudUserId } = await rmCloudUser(token);
+
+            setStep("Linking hub…");
+            const nodeSecret = randomHex32();
+            await rainmakerAssoc(cloudUserId, nodeSecret);
+            await rmCloudMap(st.node_id, nodeSecret, token);
+
+            setStep("Waiting for confirmation…");
+            await waitForReady();
+
+            if (unmountedRef.current) return;
+            setConnectedEmail(signInEmail);
+            setEmail("");
+            showToast("RainMaker account connected", "ok");
+        } catch (err) {
+            if (!unmountedRef.current) {
+                const msg = err?.message || String(err);
+                setConnectError(msg);
+                showToast("Connect failed: " + msg, "err");
+            }
+        } finally {
+            token = null;
+            if (!unmountedRef.current) { setConnecting(false); setStep(""); }
+            setPassword("");
+        }
+    }
+
+    // Reverse of doCloudConnect — design doc §10 "Disconnect (unlink
+    // account)". Unlinking removes the user-node mapping only: the node
+    // stays self-claimed and connected to RainMaker's cloud (same state as
+    // a freshly-claimed node), and the exposed-device set in NVS is left
+    // alone, so reconnecting later restores the same device selections. We
+    // don't keep the RainMaker token, so unlinking re-authenticates with
+    // the password exactly like connecting did — same fields, same
+    // never-store handling, same clear-on-finally.
+    async function doCloudDisconnect(e) {
+        e.preventDefault();
+        if (connecting || !email.trim() || !password) return;
+        if (!st?.node_id) { showToast("Node ID not loaded yet — wait a moment and retry", "err"); return; }
+        if (!confirm("Unlink this hub from your RainMaker account? It will disappear from the RainMaker app. Your device selections and the RainMaker uplink are kept — reconnect anytime.")) return;
+
+        setConnecting(true);
+        setConnectError(null);
+        const signInEmail = email.trim();
+        let token = null;
+        try {
+            setStep("Signing in…");
+            const login = await rmCloudLogin(signInEmail, password);
+            token = login.token;
+            setPassword("");                          // no longer needed past this point
+
+            setStep("Unlinking…");
+            await rmCloudUnmap(st.node_id, token);
+
+            setStep("Finishing…");
+            const confirmed = await waitForUnassociated();
+
+            if (unmountedRef.current) return;
+            setConnectedEmail(null);
+            setEmail("");
+            showToast(confirmed
+                ? "Disconnected from RainMaker account."
+                : "Unlinked — the hub may take a moment to update.", "ok");
+        } catch (err) {
+            if (!unmountedRef.current) {
+                const msg = err?.message || String(err);
+                setConnectError(msg);
+                showToast("Disconnect failed: " + msg, "err");
+            }
+        } finally {
+            token = null;
+            if (!unmountedRef.current) { setConnecting(false); setStep(""); }
+            setPassword("");
+        }
+    }
+
+    const state = st?.state;
+    // Task 21 fix: claim_failed used to fall into needsAssoc too, showing
+    // the association form with its submit button relabeled "Retry" — but
+    // rainmaker_gw_assoc_start() (firmware) unconditionally rejects with
+    // ESP_ERR_INVALID_STATE while claim_failed (no live agent to hand a
+    // mapping request to; see rainmaker_gw.h's own doc comment), so that
+    // button could never succeed. Association only makes sense once a
+    // claim has actually gone through, i.e. unassociated.
+    const needsAssoc = state === "unassociated";
+    const claimFailed = state === "claim_failed";
+    // Disconnect's counterpart to needsAssoc. "ready" from the node poll is
+    // the authoritative signal; connectedEmail (set right when a Connect
+    // finishes) covers the brief window before the next poll tick lands,
+    // but never wins over an authoritative "unassociated" status (e.g. the
+    // node was unmapped from the app itself) — needsAssoc and isConnected
+    // must never both be true.
+    const isConnected = state === "ready" || (!!connectedEmail && !needsAssoc);
+
+    return (
+        <Card title="RainMaker">
+            <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <RainMakerStateBadge state={state} />
+            </div>
+            {connectedEmail && (
+                <p class="field-hint" style="color:var(--success);margin-bottom:10px">
+                    Connected as {connectedEmail}
+                </p>
+            )}
+            <dl class="info-dl">
+                <dt>Node ID</dt>
+                <dd style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <code class="mono">{st?.node_id || "—"}</code>
+                    {st?.node_id && (
+                        <button type="button" class="small" onClick={copyNodeId}>Copy</button>
+                    )}
+                </dd>
+                <dt>Devices bridged</dt>
+                <dd>{st?.devices ?? "—"}</dd>
+            </dl>
+
+            {needsAssoc && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <p class="field-hint">
+                        Sign in with your RainMaker account to link this hub — no CLI needed.
+                        Sign-in goes straight to Espressif over HTTPS; ZHAC never sees or stores
+                        your password.
+                    </p>
+                    <form onSubmit={doCloudConnect}>
+                        <label>Email / username
+                            <input type="email" value={email} autocomplete="username"
+                                   disabled={connecting}
+                                   onInput={(e) => setEmail(e.currentTarget.value)} />
+                        </label>
+                        <label>Password
+                            <input type="password" value={password} autocomplete="current-password"
+                                   disabled={connecting}
+                                   onInput={(e) => setPassword(e.currentTarget.value)} />
+                        </label>
+                        <button type="submit" class="primary small" disabled={connecting}>
+                            {connecting ? (step || "Connecting…") : "Connect RainMaker account"}
+                        </button>
+                    </form>
+                    {connectError && !connecting && (
+                        <p class="field-hint" style="color:var(--danger)">{connectError}</p>
+                    )}
+
+                    <div style="margin-top:14px">
+                        <button type="button" class="small" onClick={() => setAdvancedOpen(v => !v)}>
+                            {advancedOpen ? "Hide advanced" : "Advanced — enter credentials manually (CLI)"}
+                        </button>
+                    </div>
+                    {advancedOpen && (
+                        <>
+                            <p class="field-hint" style="margin-top:10px">
+                                Run <code class="mono">test --addnode &lt;node_id&gt;</code> from the
+                                RainMaker CLI using the Node ID above, then paste the resulting user ID
+                                and secret here. Use this if your account has MFA enabled or the
+                                one-click sign-in above doesn't work.
+                            </p>
+                            <form onSubmit={doAssoc}>
+                                <label>User ID
+                                    <input type="text" value={userId} autocomplete="off"
+                                           onInput={(e) => setUserId(e.currentTarget.value)} />
+                                </label>
+                                <label>Secret
+                                    <input type="password" value={secret} autocomplete="off"
+                                           onInput={(e) => setSecret(e.currentTarget.value)} />
+                                </label>
+                                <button type="submit" class="primary small" disabled={assocBusy}>
+                                    {assocBusy ? "Associating…" : "Associate"}
+                                </button>
+                            </form>
+                        </>
+                    )}
+                </>
+            )}
+            {isConnected && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <p class="field-hint">
+                        Sign in again to unlink this hub from your RainMaker account — we don't
+                        keep your password or the RainMaker token, so unlinking needs a fresh
+                        sign-in, same as connecting did.
+                    </p>
+                    <form onSubmit={doCloudDisconnect}>
+                        <label>Email / username
+                            <input type="email" value={email} autocomplete="username"
+                                   disabled={connecting}
+                                   onInput={(e) => setEmail(e.currentTarget.value)} />
+                        </label>
+                        <label>Password
+                            <input type="password" value={password} autocomplete="current-password"
+                                   disabled={connecting}
+                                   onInput={(e) => setPassword(e.currentTarget.value)} />
+                        </label>
+                        <button type="submit" class="secondary small" disabled={connecting}>
+                            {connecting ? (step || "Disconnecting…") : "Disconnect"}
+                        </button>
+                    </form>
+                    {connectError && !connecting && (
+                        <p class="field-hint" style="color:var(--danger)">{connectError}</p>
+                    )}
+                </>
+            )}
+            {claimFailed && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <div class="field-hint" style="color:var(--danger)">
+                        Node claim failed — the device could not register with the RainMaker
+                        cloud. Check the device log for the specific reason. Claiming only runs
+                        once at startup, so reboot the device to retry; association becomes
+                        available again only after a successful claim.
+                    </div>
+                </>
+            )}
+        </Card>
     );
 }
 

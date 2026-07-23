@@ -294,7 +294,15 @@ main {
 }
 
 /* ── Forms ─────────────────────────────────────────────────────────── */
-form label {
+/* `.card label:not([class])` mirrors every `form ...` rule below for cards
+   that are NOT wrapped in a <form> — Remote, Zigbee network, MQTT, etc. Only
+   the WiFi card uses a real <form>, so everywhere else the plain labels fell
+   back to the browser default `display: inline` and their inputs lost the
+   width/padding/border styling, running URL + token + device-id together on
+   one line. `:not([class])` keeps .toggle / .theme-radio / .check-label on
+   their own inline-flex layout — they carry a class, so they never match. */
+form label,
+.card label:not([class]) {
     display: block;
     margin: 6px 0;
     font-size: 13px;
@@ -305,6 +313,11 @@ form input[type=password],
 form input[type=url],
 form input[type=number],
 form select,
+.card label:not([class]) input[type=text],
+.card label:not([class]) input[type=password],
+.card label:not([class]) input[type=url],
+.card label:not([class]) input[type=number],
+.card label:not([class]) select,
 .field-input {
     width: 100%;
     padding: 7px 10px;
@@ -316,6 +329,8 @@ form select,
 }
 form input:focus,
 form select:focus,
+.card label:not([class]) input:focus,
+.card label:not([class]) select:focus,
 .field-input:focus {
     outline: none;
     border-color: var(--blue);

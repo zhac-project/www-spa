@@ -10,6 +10,7 @@ import { getDevice, renameDevice, reinterviewDevice, configureDevice,
          deleteDevice, setDeviceAttr, bindDevice,
          deviceGroupsList, deviceGroupsAdd, deviceGroupsRemove, deviceGroupsRefresh } from "../stores/devices.js";
 import { devices as devicesStore } from "../stores/devices.js";
+import { uplinkGet, deviceRainmakerList, deviceRainmakerAdd, deviceRainmakerRemove } from "../stores/rainmaker.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
 import { call } from "../ws/client.js";
@@ -717,6 +718,158 @@ function ThrottleControl({ d, ieee }) {
     );
 }
 
+// Normalise an IEEE-64 address string for case/format-insensitive
+// comparison. Firmware formats device.rainmaker.list entries as
+// `0x%016llX` (upper-case hex, zero-padded to 16 digits); the ieee this
+// page carries (from device.get / the devices store) isn't guaranteed to
+// match that exactly. Strip an optional "0x" prefix, upper-case, and
+// zero-pad both sides before comparing — skip this and every device
+// silently reads as "off".
+function normIeee(s) {
+    if (!s) return "";
+    let h = String(s).trim();
+    if (h.toLowerCase().startsWith("0x")) h = h.slice(2);
+    return h.toUpperCase().padStart(16, "0");
+}
+
+// Per-device "Expose to RainMaker" toggle (Task 20). Only meaningful
+// when the cloud uplink is set to RainMaker (Settings → Uplink); the
+// bridge doesn't run otherwise, so the control renders a hint pointing
+// there instead of a dead toggle. Membership is queried fresh each time
+// the Options tab is opened for this device — there are no push events
+// for this feature (see stores/rainmaker.js), so like Settings'
+// UplinkCard this fetches on mount with an `alive` guard and a visible
+// Retry on failure, but WITHOUT UplinkCard's 5s poll loop: this control
+// only exists while the user is looking at exactly this tab for exactly
+// this device, so there's nothing external worth polling for — closing
+// and reopening the tab already re-fetches.
+function RainMakerExposeControl({ ieee }) {
+    const [uplink, setUplink]   = useState(null);   // null = loading; else "none"|"custom_mqtt"|"rainmaker"
+    const [devices, setDevices] = useState(null);   // null = not loaded; else device.rainmaker.list().devices
+    const [loadErr, setLoadErr] = useState(false);
+    const [busy, setBusy]       = useState(false);
+    // Optimistic local override, same idiom as AttrBoolRow above: null =
+    // follow `devices`, non-null = we just clicked and are waiting on the
+    // add/remove round-trip. Without this the controlled checkbox snaps
+    // back to its old value the instant `busy` triggers a re-render (the
+    // click already flipped the native control), then jumps again once
+    // the response lands.
+    const [localExposed, setLocalExposed] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        setUplink(null);
+        setDevices(null);
+        setLoadErr(false);
+        (async () => {
+            try {
+                const up = await uplinkGet();
+                if (!alive) return;
+                const mode = up?.uplink ?? "none";
+                setUplink(mode);
+                if (mode !== "rainmaker") return;
+                const res = await deviceRainmakerList();
+                if (!alive) return;
+                setDevices(res?.devices || []);
+            } catch (_) {
+                if (alive) setLoadErr(true);
+            }
+        })();
+        return () => { alive = false; };
+    }, [ieee]);
+
+    // Manual retry — mirrors UplinkCard's retryLoad(): no `alive` guard
+    // (same trade-off UplinkCard accepts; this is a user-initiated
+    // one-shot, not the mount effect).
+    function retryLoad() {
+        setLoadErr(false);
+        uplinkGet().then(async (up) => {
+            const mode = up?.uplink ?? "none";
+            setUplink(mode);
+            if (mode !== "rainmaker") { setDevices(null); return; }
+            try {
+                const res = await deviceRainmakerList();
+                setDevices(res?.devices || []);
+            } catch (_) { setLoadErr(true); }
+        }, () => setLoadErr(true));
+    }
+
+    if (uplink === null) {
+        return loadErr ? (
+            <div class="tab-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--danger)">
+                <span>Couldn't load RainMaker status.</span>
+                <button type="button" class="small" onClick={retryLoad}>Retry</button>
+            </div>
+        ) : <p class="tab-hint">Loading RainMaker status…</p>;
+    }
+
+    // Uplink isn't RainMaker — nothing to toggle. A one-line hint (rather
+    // than rendering nothing) so a user who doesn't know this feature
+    // exists has somewhere to go; it costs one muted line on a tab that
+    // already shows similar hints for its other read-only sections.
+    if (uplink !== "rainmaker") {
+        return (
+            <p class="tab-hint">
+                RainMaker bridging is off. Enable it under{" "}
+                <a href="javascript:void(0)"
+                   onClick={(e) => { e.preventDefault(); navigate("settings"); }}>
+                    Settings → Uplink
+                </a>{" "}to expose this device.
+            </p>
+        );
+    }
+
+    if (devices === null) {
+        return loadErr ? (
+            <div class="tab-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--danger)">
+                <span>Couldn't load RainMaker device list.</span>
+                <button type="button" class="small" onClick={retryLoad}>Retry</button>
+            </div>
+        ) : <p class="tab-hint">Loading RainMaker device list…</p>;
+    }
+
+    const entry = devices.find(x => normIeee(x.ieee) === normIeee(ieee));
+    const exposed = localExposed !== null ? localExposed : !!entry;
+
+    async function onToggle(e) {
+        const next = e.currentTarget.checked;
+        setLocalExposed(next);      // flip UI immediately
+        setBusy(true);
+        let res;
+        const ok = await withToast(
+            async () => { res = next ? await deviceRainmakerAdd(ieee) : await deviceRainmakerRemove(ieee); },
+            next ? "Exposed to RainMaker" : "Removed from RainMaker",
+            next ? "Expose to RainMaker failed" : "Remove from RainMaker failed");
+        // Use the add/remove response's own list rather than re-fetching —
+        // fewer round-trips and no race with a stale re-fetch.
+        if (ok === SUCCESS) setDevices(res?.devices || []);
+        setLocalExposed(null);      // hand back to derived state either way
+                                     // (success: reflects the fresh list;
+                                     // failure: reverts to the pre-click value)
+        setBusy(false);
+    }
+
+    return (
+        <div class="opt-rainmaker" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+            <h4 style="margin-bottom:8px;font-size:13px">RainMaker</h4>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+                <label class="toggle">
+                    <input type="checkbox" checked={exposed} disabled={busy} onChange={onToggle} />
+                    <span class="toggle-slider"></span>
+                </label>
+                <span>{exposed ? "Exposed to RainMaker" : "Not exposed to RainMaker"}</span>
+                {exposed && entry?.type && <span class="ro-tag">{entry.type}</span>}
+            </div>
+            <p class="tab-hint">
+                Bridges this device into your RainMaker account as a virtual node
+                (up to 10 devices per hub). Sent via{" "}
+                <code class="mono">device.rainmaker.add</code> /{" "}
+                <code class="mono">device.rainmaker.remove</code>.
+            </p>
+        </div>
+    );
+}
+
 function OptionsTab({ d, ieee }) {
     // Reference table of exposes explicitly marked `category: "config"` by
     // the device definition (z2m convention). State-level attributes
@@ -732,6 +885,7 @@ function OptionsTab({ d, ieee }) {
     return (
         <div class="tab-panel">
             <ThrottleControl d={d} ieee={ieee} />
+            <RainMakerExposeControl ieee={ieee} />
             <p class="tab-hint">
                 Reference view of this device's configuration exposes
                 (read-only). To change a value, use the matching row on the

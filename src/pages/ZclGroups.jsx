@@ -6,7 +6,7 @@
 // the Collections page (gateway fan-out). Refresh-on-mutation (no push wiring).
 import { useState, useEffect } from "preact/hooks";
 import { devices, groupsAll, deviceGroupsAdd, deviceGroupsRemove } from "../stores/devices.js";
-import { withToast, showToast } from "../stores/ui.js";
+import { withToast, showToast, SUCCESS } from "../stores/ui.js";
 
 export function ZclGroupsPage() {
     const [groups, setGroups]   = useState([]);
@@ -17,14 +17,14 @@ export function ZclGroupsPage() {
     const [sel, setSel]         = useState({});   // per-gid add-picker selection
 
     async function refresh() {
-        setLoading(true);
         try {
             const r = await groupsAll();
             setGroups(r && r.groups ? r.groups : []);
         } catch (e) {
             showToast("Failed to load groups", "err");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
     useEffect(() => { refresh(); }, []);
 
@@ -34,24 +34,25 @@ export function ZclGroupsPage() {
     async function addMember(gid, ieee) {
         if (!ieee) return;
         const ok = await withToast(() => deviceGroupsAdd(ieee, 1, gid), "Added to group", "Add failed");
-        if (ok) { setSel(s => ({ ...s, [gid]: "" })); refresh(); }
+        if (ok === SUCCESS) { setSel(s => ({ ...s, [gid]: "" })); refresh(); }
     }
     async function removeMember(gid, ieee) {
         const ok = await withToast(() => deviceGroupsRemove(ieee, 1, gid), "Removed from group", "Remove failed");
-        if (ok) refresh();
+        if (ok === SUCCESS) refresh();
     }
     async function doCreate() {
         const gid = parseInt(newGid, 10);
         if (!(gid >= 1 && gid <= 65535)) { showToast("Group id must be 1–65535", "err"); return; }
         if (!newIeee) { showToast("Pick a device", "err"); return; }
         const ok = await withToast(() => deviceGroupsAdd(newIeee, 1, gid), "Group created", "Create failed");
-        if (ok) { setCreating(false); setNewGid(""); setNewIeee(""); refresh(); }
+        if (ok === SUCCESS) { setCreating(false); setNewGid(""); setNewIeee(""); refresh(); }
     }
 
     return (
         <div>
-            <div class="row" style="justify-content:space-between;align-items:center">
+            <div class="group-header">
                 <h2>Groups</h2>
+                <span class="toolbar-spacer" />
                 <div>
                     <button onClick={refresh}>Refresh</button>{" "}
                     <button class="primary" onClick={() => setCreating(c => !c)}>+ New group</button>

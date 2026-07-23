@@ -10,6 +10,18 @@ across the ZHAC platform.
 
 ### Added
 
+- **Global Groups tab: by-gid native ZCL membership.** A new top-level "Groups"
+  nav tab (after Collections) lists native ZCL group membership fleet-wide, one
+  card per group id with member device chips, sourced from the new `groups.all`
+  gateway-mirror op (read-only; gids ascending; members carry ieee only).
+  Add/remove reuse the existing per-device `device.groups.add/remove` API
+  (ep 1); a "+ New group" control creates a group by joining its first device.
+  Distinct from the per-device Groups tab (live single-device query) and from
+  Collections (gateway fan-out) — this is the fleet-wide view of real ZCL
+  groups (e.g. MiBoxer zone remotes).
+
+### Added
+
 - **Device Groups tab: live membership list.** The Groups tab now loads and shows
   the device's tracked ZCL group membership as chips (each with a remove ×), via
   the dedicated `device.groups.list/add/remove` API (replacing the increment-1

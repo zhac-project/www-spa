@@ -17,6 +17,7 @@ import { InfoPage }         from "./pages/Info.jsx";
 import { DevicesPage }      from "./pages/Devices.jsx";
 import { DeviceDetailPage } from "./pages/DeviceDetail.jsx";
 import { GroupsPage }       from "./pages/Groups.jsx";
+import { ZclGroupsPage }    from "./pages/ZclGroups.jsx";
 import { RulesPage }        from "./pages/Rules.jsx";
 import { ScriptsPage }      from "./pages/Scripts.jsx";
 import { LogsPage }         from "./pages/Logs.jsx";
@@ -34,6 +35,7 @@ const NAV = [
     { id: "info",     label: "Info" },
     { id: "devices",  label: "Devices" },
     { id: "groups",   label: "Collections" },
+    { id: "zclgroups", label: "Groups" },
     { id: "rules",    label: "Rules" },
     { id: "scripts",  label: "Scripts" },
     { id: "log",      label: "Log" },
@@ -145,6 +147,7 @@ function AppShell() {
                     {page === "devices"  && <DevicesPage />}
                     {page === "device"   && <DeviceDetailPage />}
                     {page === "groups"   && <GroupsPage />}
+                    {page === "zclgroups" && <ZclGroupsPage />}
                     {page === "rules"    && <RulesPage />}
                     {page === "scripts"  && <ScriptsPage />}
                     {page === "log"      && <LogsPage />}

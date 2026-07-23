@@ -112,6 +112,9 @@ export async function deviceGroupsRemove(ieee, ep, gid) { return call("device.gr
 // Authoritative refresh: reads the device's real ZCL group table + reconciles.
 export async function deviceGroupsRefresh(ieee, ep)    { return call("device.groups.refresh", { ieee, ep }); }
 
+// Global native-ZCL membership, inverted by gid (groups.all op). Read-only fetch.
+export async function groupsAll() { return call("groups.all", {}); }
+
 // ── Event fan-in ────────────────────────────────────────────────────────
 
 // IEEEs can arrive in mixed case ("0x70C5…" vs the stored lowercase

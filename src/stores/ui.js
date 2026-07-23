@@ -27,7 +27,7 @@ export const SUCCESS = Symbol("withToast.success");
 //   #/info
 //   #/devices
 //   #/device/<ieee>
-//   #/groups, #/rules, #/scripts, #/log, #/diag, #/ota, #/settings
+//   #/groups, #/zclgroups, #/rules, #/scripts, #/log, #/diag, #/ota, #/settings
 //
 // `navigate(page, { ieee })` writes the corresponding hash; the
 // `hashchange` listener drives `ui.activePage` so back/forward, manual
@@ -35,7 +35,7 @@ export const SUCCESS = Symbol("withToast.success");
 // when the new state already matches (avoids history-spam on re-clicks).
 // ---------------------------------------------------------------------------
 const VALID_PAGES = new Set([
-    "info", "devices", "device", "groups", "rules",
+    "info", "devices", "device", "groups", "zclgroups", "rules",
     "scripts", "log", "diag", "ota", "settings",
 ]);
 

@@ -62,23 +62,23 @@
     --modal-backdrop: rgba(0,0,0,.45);
 
     /* Badge fills (semantic tinted panels). */
-    --badge-ok-bg:    #e8f5e9;
-    --badge-warn-bg:  #fff3e0;
-    --badge-err-bg:   #ffebee;
+    --badge-ok-bg:    #e1f5e4;
+    --badge-warn-bg:  #fdecd1;
+    --badge-err-bg:   #ffe7e4;
 
     /* Editor active-line tints (derived from --blue). */
-    --cm-active-line:        rgba(26,115,232,0.06);
-    --cm-active-line-gutter: rgba(26,115,232,0.08);
-    --cm-selection:          rgba(26,115,232,0.18);
+    --cm-active-line:        rgb(53 120 184 / 0.06);
+    --cm-active-line-gutter: rgb(53 120 184 / 0.08);
+    --cm-selection:          rgb(53 120 184 / 0.18);
 
     /* Lua syntax tokens. */
-    --syn-keyword:  #1558b0;
-    --syn-string:   #2e7d32;
-    --syn-number:   #b58100;
-    --syn-comment:  #6b7280;
-    --syn-function: #6f42c1;
-    --syn-operator: #212121;
-    --syn-type:     #b58100;
+    --syn-keyword:  #2266a4;
+    --syn-string:   #196632;
+    --syn-number:   #8a5600;
+    --syn-comment:  #5c6470;
+    --syn-function: #884783;
+    --syn-operator: #1d2530;
+    --syn-type:     #8a5600;
 
     /* Log-viewer severity colours. */
     --log-info:  #9cdcfe;
@@ -88,9 +88,9 @@
     --log-verb:  #808080;
 
     /* OTA progress. */
-    --ota-bar:     #2da44e;
-    --ota-bar-ok:  #1f883d;
-    --ota-bar-err: #cf222e;
+    --ota-bar:     #439458;
+    --ota-bar-ok:  #17683a;
+    --ota-bar-err: #a83634;
 
     /* Spinner ring base. */
     --spinner-track: #cccccc;
@@ -199,13 +199,13 @@
     --dsl-fg:         #d1d5db;
     --modal-backdrop: rgba(0,0,0,.65);
 
-    --badge-ok-bg:    #1b3a25;
-    --badge-warn-bg:  #3a2a10;
-    --badge-err-bg:   #3a1a1a;
+    --badge-ok-bg:    #1a2e1e;
+    --badge-warn-bg:  #3c2a0e;
+    --badge-err-bg:   #421c19;
 
-    --cm-active-line:        rgba(76,154,255,0.10);
-    --cm-active-line-gutter: rgba(76,154,255,0.16);
-    --cm-selection:          rgba(76,154,255,0.30);
+    --cm-active-line:        rgb(91 157 223 / 0.10);
+    --cm-active-line-gutter: rgb(91 157 223 / 0.16);
+    --cm-selection:          rgb(91 157 223 / 0.30);
 
     --syn-keyword:  #79b8ff;
     --syn-string:   #85e89d;
@@ -221,9 +221,9 @@
     --log-debug: #7ee787;
     --log-verb:  #9ba3ad;
 
-    --ota-bar:     #3fb950;
-    --ota-bar-ok:  #2ea043;
-    --ota-bar-err: #f85149;
+    --ota-bar:     #5dad70;
+    --ota-bar-ok:  #5dad70;
+    --ota-bar-err: #db6c66;
 
     --spinner-track: #3a414c;
 

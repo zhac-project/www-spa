@@ -12,34 +12,41 @@
 :root {
     color-scheme: light dark;
 
-    --blue:      #1a73e8;
-    --blue-dark: #1558b0;
-    --bg:        #f5f6fa;
-    --bg-alt:    #f6f8fa;
+    --blue:      #3b6ea5;
+    --blue:      oklch(0.56 0.12 250);
+    --blue-dark: #33608f;
+    --blue-dark: oklch(0.5 0.12 250);
+    --bg:        #eef0f2;
+    --bg-alt:    #e9ecef;
     --card-bg:   #ffffff;
-    --border:    #e0e0e0;
-    --text:      #212121;
-    --muted:     #6b7280;
-    --success:   #2e7d32;
-    --warn:      #f57c00;
-    --danger:    #d32f2f;
-    --danger-strong: #b71c1c;
+    --border:    #e6e9ed;
+    --text:      #1d2530;
+    --muted:     #5c6470;
+    --success:   #3f9668;
+    --success:   oklch(0.6 0.12 150);
+    --warn:      #a87420;
+    --warn:      oklch(0.65 0.13 70);
+    --danger:    #a33a2c;
+    --danger:    oklch(0.5 0.15 25);
+    --danger-strong: #8a3025;
+    --danger-strong: oklch(0.44 0.15 25);
     --log-bg:    #1e1e1e;
     --log-text:  #d4d4d4;
-    --row-a:     #f5f5f5;
-    --row-b:     #ececec;
+    --row-a:     #f7f8f9;
+    --row-b:     #eef0f2;
 
     /* Component-level fills previously baked in as #fff / greys.
      * Promoted so dark mode can re-tune them without per-rule overrides. */
     --surface:        #ffffff;       /* inputs, buttons, modal-box, dev-wrapper */
-    --surface-hover:  #f0f0f0;       /* button:hover */
-    --surface-sunken: #fafafa;       /* dev-tabs strip */
-    --surface-soft:   #f7f7f7;       /* table th, dev-bottom-bar */
+    --surface-hover:  #e9ecef;       /* button:hover */
+    --surface-sunken: #eef0f2;       /* dev-tabs strip */
+    --surface-soft:   #e9ecef;       /* table th, dev-bottom-bar */
     --surface-input:  #ffffff;       /* form inputs, textarea */
-    --gutter-bg:      #f3f3f3;       /* .code-editor-gutter */
-    --secondary-btn-bg: #f0f3f7;     /* button.secondary */
-    --row-hover:      #e8f0fe;       /* .data-table tbody tr:hover */
-    --chip-bg:        #eef1f5;       /* .group-chips .chip */
+    --gutter-bg:      #e9ecef;       /* .code-editor-gutter */
+    --secondary-btn-bg: #e9ecef;     /* button.secondary */
+    --row-hover:      #e3e8ee;       /* .data-table tbody tr:hover */
+    --chip-bg:        #e9ecef;       /* .group-chips .chip */
+    --border-strong:  #7f8896;
     --edit-btn-bg:    #6b7280;       /* .act-btn.edit */
     --edit-btn-hover: #4b5563;
     --toggle-track:   #cccccc;       /* .toggle-slider off-state */
@@ -95,6 +102,52 @@
 
     /* Spinner ring base. */
     --spinner-track: #cccccc;
+
+    /* ── Typography ──────────────────────────────────────────────────
+     * Tier A keeps the platform stack — no @fontsource, zero font bytes.
+     * Albert Sans is deliberately NOT used here: it ships no Cyrillic
+     * subset, and this UI renders Cyrillic device and group names. */
+    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+                 Arial, 'Noto Sans', sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+                 'Liberation Mono', monospace;
+
+    --text-2xs:  0.6875rem;
+    --text-xs:   0.75rem;
+    --text-sm:   0.8125rem;
+    --text-base: 0.875rem;
+    --text-md:   1rem;
+    --text-lg:   1.125rem;
+    --text-xl:   1.375rem;
+    --text-2xl:  1.75rem;
+    --text-3xl:  2rem;
+
+    --weight-regular:  400;
+    --weight-medium:   500;
+    --weight-semibold: 600;
+    --weight-bold:     700;
+
+    --tracking-caps: 0.06em;
+    --leading-tight: 1.1;
+    --leading-snug:  1.35;
+    --leading-normal: 1.5;
+
+    /* ── Geometry ────────────────────────────────────────────────────*/
+    --radius-sm:      8px;   /* destructive controls — never a pill */
+    --radius-control: 10px;
+    --radius-input:   10px;
+    --radius-card:    14px;
+    --radius-card-lg: 20px;
+    --radius-pill:    999px;
+
+    /* ── Elevation — two working tiers plus overlay ──────────────────*/
+    --shadow-color: 30 40 60;
+    --shadow-1: 0 1px 2px rgb(var(--shadow-color) / 0.06);
+    --shadow-2: 0 2px 8px rgb(var(--shadow-color) / 0.10);
+    --shadow-3: 0 6px 20px rgb(var(--shadow-color) / 0.18);
+
+    /* ── Focus ───────────────────────────────────────────────────────*/
+    --color-focus: var(--blue);
 }
 
 /* ── Dark mode ───────────────────────────────────────────────────────
@@ -107,32 +160,38 @@
  *   "dark"   → forced dark, ignore OS
  * The Settings page exposes the chooser. */
 :root[data-theme="dark"] {
-    --blue:      #4c9aff;       /* lifted hue, 6.8:1 on --bg */
-    --blue-dark: #1a73e8;       /* hover stays close to brand */
-    --bg:        #0f1115;
-    --bg-alt:    #161a21;
-    --card-bg:   #161a21;
-    --border:    #262b34;
-    --text:      #e6e8eb;       /* 14.6:1 on --bg */
-    --muted:     #9ba3ad;       /* 6.0:1 on --bg, 5.1:1 on --card-bg */
-    --success:   #4ade80;       /* 8.2:1 on --bg */
-    --warn:      #fbbf24;       /* 9.4:1 on --bg */
-    --danger:    #f87171;       /* 5.7:1 on --bg */
+    --blue:      #5e9ad4;
+    --blue:      oklch(0.68 0.12 250);
+    --blue-dark: #7aaee2;
+    --blue-dark: oklch(0.74 0.12 250);
+    --bg:        #141a22;
+    --bg-alt:    #1a212b;
+    --card-bg:   #1d2530;
+    --border:    #2a3340;
+    --text:      #eef0f2;
+    --muted:     #9aa3b0;
+    --success:   #5cae7f;
+    --success:   oklch(0.68 0.12 150);
+    --warn:      #b98a35;
+    --warn:      oklch(0.7 0.13 70);
+    --danger:    #d3705c;
+    --danger:    oklch(0.66 0.14 25);
     --danger-strong: #ef4444;
     --log-bg:    #0b0d11;
     --log-text:  #d4d4d4;
-    --row-a:     #1a1f27;
-    --row-b:     #1e242d;
+    --row-a:     #1d2530;
+    --row-b:     #1a212b;
 
-    --surface:        #1a1f27;
-    --surface-hover:  #232934;
-    --surface-sunken: #131720;
-    --surface-soft:   #1a1f27;
-    --surface-input:  #0f1115;
-    --gutter-bg:      #131720;
-    --secondary-btn-bg: #232934;
-    --row-hover:      #1f3354;
-    --chip-bg:        #232934;
+    --surface:        #1d2530;
+    --surface-hover:  #2a3340;
+    --surface-sunken: #141a22;
+    --surface-soft:   #1a212b;
+    --surface-input:  #141a22;
+    --gutter-bg:      #1a212b;
+    --secondary-btn-bg: #2a3340;
+    --row-hover:      #222c37;
+    --chip-bg:        #2a3340;
+    --border-strong:  #6b7280;
     --edit-btn-bg:    #4b5563;
     --edit-btn-hover: #6b7280;
     --toggle-track:   #3a414c;
@@ -182,6 +241,11 @@
     --ota-bar-err: #f85149;
 
     --spinner-track: #3a414c;
+
+    --shadow-color: 0 0 0;
+    --shadow-1: 0 1px 2px rgb(var(--shadow-color) / 0.30);
+    --shadow-2: 0 4px 12px rgb(var(--shadow-color) / 0.38);
+    --shadow-3: 0 8px 30px rgb(var(--shadow-color) / 0.48);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

@@ -20,7 +20,7 @@
     --border:    #e6e9ed;
     --text:      #1d2530;
     --muted:     #5c6470;
-    --success:   #439458;
+    --success:   #287c42;
     --warn:      #c17f21;
     --danger:    #a83634;
     --danger-strong: #942124;
@@ -54,9 +54,9 @@
     --nav-link-active-bg: rgba(255,255,255,.22);
     --nav-mobile-hover-bg: rgba(255,255,255,.18);
     --ws-default:     #999999;
-    --ws-connected:   #4caf50;
-    --ws-disconnected: #f44336;
-    --ok-color:       #4caf50;       /* .icon-btn.ok */
+    --ws-connected:   #439458;
+    --ws-disconnected: #a83634;
+    --ok-color:       #287c42;       /* .icon-btn.ok */
     --hard-toggle-fg: #555555;
     --dsl-fg:         #333333;
     --modal-backdrop: rgba(0,0,0,.45);
@@ -163,7 +163,7 @@
     --success:   #5dad70;
     --warn:      #d18e35;
     --danger:    #db6c66;
-    --danger-strong: #db6c66;
+    --danger-strong: #f08f87;
     --log-bg:    #0b0d11;
     --log-text:  #d4d4d4;
     --row-a:     #1d2530;

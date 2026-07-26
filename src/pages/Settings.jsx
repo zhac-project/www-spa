@@ -103,7 +103,7 @@ export function SettingsPage() {
                             </label>
                         ))}
                     </div>
-                    <div class="muted" style="margin-top:8px;font-size:12px">
+                    <div class="muted" style="margin-top:8px;font-size:var(--text-xs)">
                         System follows your OS/browser preference. Light and Dark override it.
                     </div>
                 </Card>
@@ -124,7 +124,7 @@ export function SettingsPage() {
                             {nets.map((n, i) => (
                                 <div key={i} class="wifi-net"
                                      onClick={() => setSsid(n.ssid)}
-                                     style="cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:4px;margin:4px 0;display:flex;justify-content:space-between">
+                                     style="cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-control);margin:4px 0;display:flex;justify-content:space-between">
                                     <span>{n.auth !== "open" ? "🔒 " : ""}{n.ssid}</span>
                                     <span class="muted">{n.rssi} dBm</span>
                                 </div>
@@ -183,7 +183,7 @@ export function SettingsPage() {
                     </div>
                     <p class="field-hint">Channel + key changes apply after factory reset.</p>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
-                    <p class="muted" style="margin-bottom:8px;font-size:13px">
+                    <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
                         Erase all paired devices, rules, and scripts from P4. The coordinator will reboot.
                     </p>
                     <button class="danger small" onClick={doZigbeeReset}>Factory reset P4</button>
@@ -211,7 +211,7 @@ export function SettingsPage() {
                 {d.auth_enabled && <ChangePasswordCard />}
 
                 <Card title="OTA">
-                    <p class="muted" style="margin-bottom:8px;font-size:13px">
+                    <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
                         Firmware updates live on the dedicated OTA page, which
                         validates the URL, prompts before flashing, and shows
                         progress for both chips.
@@ -323,7 +323,7 @@ function UplinkCard() {
                             <button type="button" class="small" onClick={retryLoad}>Retry</button>
                         </div>
                     ) : (
-                        <p class="muted" style="font-size:12px">Loading current setting…</p>
+                        <p class="muted" style="font-size:var(--text-xs)">Loading current setting…</p>
                     )
                 )}
                 <p class="field-hint">
@@ -811,7 +811,7 @@ function RemoteCard() {
                        autocomplete="off"
                        onInput={(e) => setToken(e.currentTarget.value)} />
             </label>
-            <label>Device ID <span class="muted" style="font-weight:normal;font-size:12px">(optional — defaults to base MAC)</span>
+            <label>Device ID <span class="muted" style="font-weight:normal;font-size:var(--text-xs)">(optional — defaults to base MAC)</span>
                 <input type="text" value={deviceId} placeholder="leave blank to use base MAC"
                        autocomplete="off"
                        onInput={(e) => setDeviceId(e.currentTarget.value)} />
@@ -854,7 +854,7 @@ function ToggleRow({ label, checked, onChange }) {
                        onChange={(e) => onChange(e.currentTarget.checked)} />
                 <span class="toggle-slider" />
             </label>
-            <span style="font-size:13px">{label}</span>
+            <span style="font-size:var(--text-sm)">{label}</span>
         </div>
     );
 }
@@ -935,7 +935,7 @@ function ChangePasswordCard() {
 
     return (
         <Card title="Admin password">
-            <p class="muted" style="margin-bottom:8px;font-size:13px">
+            <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
                 Used to sign in to this WebUI. Changing it signs out every
                 other browser and rotates the API token.
             </p>

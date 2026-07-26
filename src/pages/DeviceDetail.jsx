@@ -252,7 +252,7 @@ function EditableLabel({ value, onSave, placeholder = "—" }) {
                        if (e.key === "Enter")  commit();
                        if (e.key === "Escape") cancel();
                    }}
-                   style="padding:4px 8px;border:1px solid var(--border);border-radius:3px" />
+                   style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control)" />
             <button class="icon-btn ok" title="Save" disabled={busy} onClick={commit}>✓</button>
             <button class="icon-btn" title="Cancel" disabled={busy} onClick={cancel}>✗</button>
         </span>
@@ -395,7 +395,7 @@ function AttrTextRow({ ieee, k, v, isNumeric, unit }) {
                        value={val}
                        onInput={(e) => setVal(e.currentTarget.value)}
                        onKeyDown={(e) => { if (e.key === "Enter") save(); }}
-                       style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:160px" />
+                       style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control);width:160px" />
                 {unit && <span class="ro-unit"> {unit}</span>}
             </td>
             <td><button class="small" onClick={save} disabled={busy}>Set</button></td>
@@ -425,7 +425,7 @@ function AttrEnumRow({ ieee, k, v, values }) {
             <td><code class="mono">{k}</code></td>
             <td>
                 <select value={shown} onChange={pick} disabled={busy}
-                        style="padding:4px 8px;border:1px solid var(--border);border-radius:3px">
+                        style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control)">
                     {(shown !== "" && !values.includes(shown)) && (
                         <option value={shown}>{String(shown)}</option>
                     )}
@@ -504,7 +504,7 @@ function CommandRow({ ieee, expose }) {
                 <td><code class="mono">{name}</code></td>
                 <td>
                     <select value={val} onChange={(e) => setVal(e.currentTarget.value)} disabled={busy}
-                            style="padding:4px 8px;border:1px solid var(--border);border-radius:3px">
+                            style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control)">
                         {values.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                 </td>
@@ -521,12 +521,12 @@ function CommandRow({ ieee, expose }) {
                     <input type="number" value={val}
                            onInput={(e) => setVal(e.currentTarget.value)}
                            onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-                           style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:160px" />
+                           style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control);width:160px" />
                 ) : (
                     <textarea value={val}
                               rows={2}
                               onInput={(e) => setVal(e.currentTarget.value)}
-                              style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;width:320px;font-family:inherit;font-size:12px" />
+                              style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control);width:320px;font-family:inherit;font-size:var(--text-xs)" />
                 )}
                 {unit && <span class="ro-unit"> {unit}</span>}
             </td>
@@ -605,7 +605,7 @@ function GroupsTab({ ieee }) {
     }
     return (
         <div class="tab-panel">
-            <h4 style="margin-bottom:8px;font-size:13px">ZCL group membership</h4>
+            <h4 style="margin-bottom:8px;font-size:var(--text-sm)">ZCL group membership</h4>
             <p class="field-hint" style="margin-bottom:12px">
                 Join this device to a Zigbee group so a hardware zone-remote drives it
                 directly (e.g. MiBoxer FUT089Z zones = groups 101–108). This is native ZCL
@@ -652,7 +652,7 @@ function BindForm({ ieee }) {
     }
     return (
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <h4 style="margin-bottom:8px;font-size:13px">Add binding</h4>
+            <h4 style="margin-bottom:8px;font-size:var(--text-sm)">Add binding</h4>
             <label style="margin-right:10px">EP <input type="number" value={ep} min="1" max="240"
                    style="width:60px" onInput={(e) => setEp(e.currentTarget.value)} /></label>
             <label style="margin-right:10px">Cluster <input value={cluster}
@@ -851,7 +851,7 @@ function RainMakerExposeControl({ ieee }) {
 
     return (
         <div class="opt-rainmaker" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
-            <h4 style="margin-bottom:8px;font-size:13px">RainMaker</h4>
+            <h4 style="margin-bottom:8px;font-size:var(--text-sm)">RainMaker</h4>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
                 <label class="toggle">
                     <input type="checkbox" checked={exposed} disabled={busy} onChange={onToggle} />

@@ -8,6 +8,38 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Changed
+
+- **Visual identity remapped onto the Soft Utility design system.** The palette,
+  type scale, radii, elevation tiers and focus ring now derive from shared design
+  tokens instead of literals scattered through the stylesheet: 25 tokens
+  introduced, 9 `font-family` / 55 `font-size` / 24 `border-radius` / 5
+  `box-shadow` declarations converted, plus 17 inline literals in the JSX.
+  The Lua editor, badge and OTA palettes were retuned off the old accent.
+
+  This is the local tier of the design system — **tokens only**. www-spa keeps
+  Preact, its own markup and the platform font stack; the component and widget
+  layers stay a premium feature of the cloud and mobile clients. No web fonts,
+  no framework change, no new dependencies. CSS grows 2.0 kB raw / 0.36 kB
+  gzipped; total bundle +2.2 kB against a 7 MB SPIFFS partition.
+
+  Dark mode continues to be driven solely by the `data-theme` attribute, so the
+  Settings theme chooser and its explicit "light" override are unaffected.
+
+### Fixed
+
+- **Focus indicators were suppressed in three places** — `textarea:focus`, the
+  shared form-input rule, and `.code-editor-input`, the last removing its outline
+  unconditionally rather than only on focus, so the Lua editor had no focus
+  indicator in any state. All three now render a 2 px `--color-focus` ring at
+  2 px offset via `:focus-visible`.
+- **Base font was hardcoded to Arial** rather than a platform stack, so the app
+  never rendered in the system UI font on any platform.
+- **Dark mode collapsed the OTA progress bar's in-progress and complete colours**
+  to a single value, removing the colour signal that a firmware flash had
+  finished — on a control where rebooting mid-flash is destructive. Light mode
+  had always kept them distinct.
+
 ### Added
 
 - **Global Groups tab: by-gid native ZCL membership.** A new top-level "Groups"

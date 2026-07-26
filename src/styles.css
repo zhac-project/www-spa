@@ -221,8 +221,14 @@
     --log-debug: #7ee787;
     --log-verb:  #9ba3ad;
 
+    /* --ota-bar-ok must stay visibly distinct from --ota-bar: they are the
+     * sequential states of one widget (flashing vs. finished) on a control
+     * where rebooting mid-flash is destructive. Dark mode signals a positive
+     * state by LIGHTENING (dark --success is lighter than light --success), so
+     * this is the design system's dark --success-text tone rather than the
+     * darker shade light mode uses. */
     --ota-bar:     #5dad70;
-    --ota-bar-ok:  #5dad70;
+    --ota-bar-ok:  #79c289;
     --ota-bar-err: #db6c66;
 
     --spinner-track: #3a414c;

@@ -10,8 +10,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   <meta name="description" content="ZHAC - dual-chip Zigbee Home Automation Controller web UI">
   <!-- Mobile address-bar tint. Two media-scoped tags so the chrome
        follows `prefers-color-scheme` along with the rest of the SPA. -->
-  <meta name="theme-color" content="#1a73e8" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <!-- Values mirror the Soft Utility tokens: light is --blue (the header fill),
+       dark is --bg (the canvas). Keep them in step with src/styles.css — a meta
+       tag cannot read a custom property, so this is the one place the palette is
+       duplicated. Note these follow the OS via prefers-color-scheme while the SPA
+       itself follows the data-theme chooser, so a user who forces light while the
+       OS is dark gets an address bar that does not match. Unavoidable: theme-color
+       has no data-theme equivalent. -->
+  <meta name="theme-color" content="#3578b8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141a22" media="(prefers-color-scheme: dark)">
   <!--
     NOTE: there is intentionally no <meta http-equiv="Content-Security-Policy">
     here. A meta-tag CSP cannot cover WebSocket (connect-src) connections

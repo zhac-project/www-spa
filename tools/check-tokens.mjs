@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Tier A token contract for www-spa. Plain node, no test framework: this repo
 // has no harness and a CSS remap does not justify introducing one.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, extname, relative } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, '..');
+const SRC_DIR = join(HERE, '../src');
 // Strip comments so a token named only inside a comment can never satisfy a probe.
 const SRC = readFileSync(join(HERE, '../src/styles.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -88,6 +90,46 @@ if (/@font-face|fontsource/i.test(SRC)) fail.push('font files present — Tier A
 if (/oklch\(/.test(SRC)) {
   fail.push('oklch( present in styles.css — hex-only tokens, no cascade "fallback" (see review finding)');
 }
+
+// Every `var(--x)` reference anywhere under src/ (.css, .js, .jsx) must resolve
+// to a `--x` declared somewhere in styles.css. This catches a typo'd token
+// (e.g. `var(--text-x)`) that would otherwise ship silently — the probes above
+// only ever check that tokens are *declared*, never that references resolve.
+const declared = new Set();
+for (const m of SRC.matchAll(/--([a-zA-Z0-9-]+)\s*:/g)) declared.add(m[1]);
+
+const stripJsComments = (s) => s
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+const walk = (dir) => {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    const st = statSync(p);
+    if (st.isDirectory()) out.push(...walk(p));
+    else if (['.css', '.js', '.jsx'].includes(extname(entry))) out.push(p);
+  }
+  return out;
+};
+
+const refFail = [];
+for (const file of walk(SRC_DIR)) {
+  const raw = readFileSync(file, 'utf8');
+  const text = extname(file) === '.css'
+    ? raw.replace(/\/\*[\s\S]*?\*\//g, '')
+    : stripJsComments(raw);
+  const re = /var\(\s*--([a-zA-Z0-9-]+)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const name = m[1];
+    if (!declared.has(name)) {
+      const line = text.slice(0, m.index).split('\n').length;
+      refFail.push(`${relative(REPO_ROOT, file)}:${line}: var(--${name}) has no declaration in styles.css`);
+    }
+  }
+}
+if (refFail.length) fail.push(`unresolved token reference(s):\n    ${refFail.join('\n    ')}`);
 
 if (fail.length) {
   console.error('token contract FAILED:');

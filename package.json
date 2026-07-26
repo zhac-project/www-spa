@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "gen:completions": "node tools/gen-zhac-completions.js",
-    "prebuild": "npm run gen:completions",
+    "prebuild": "npm run gen:completions && npm run check:tokens",
     "build": "vite build",
     "preview": "vite preview",
     "check:tokens": "node tools/check-tokens.mjs"

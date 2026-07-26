@@ -34,7 +34,10 @@ export const zhacTheme = EditorView.theme({
     ".cm-selectionBackground, ::selection, .cm-content ::selection": {
         backgroundColor: "var(--cm-selection)",
     },
-    ".cm-focused":    { outline: "none" },
+    ".cm-focused":    {
+        outline: "2px solid var(--color-focus)",
+        outlineOffset: "2px",
+    },
 });
 
 export const zhacHighlight = syntaxHighlighting(HighlightStyle.define([

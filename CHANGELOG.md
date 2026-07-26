@@ -26,6 +26,10 @@ across the ZHAC platform.
   Dark mode continues to be driven solely by the `data-theme` attribute, so the
   Settings theme chooser and its explicit "light" override are unaffected.
 
+  The type scale moved from `px` to `rem`, so the UI now scales with the
+  browser's font-size setting rather than staying pinned to the OS default —
+  an intended behaviour change carried over from the token remap.
+
 ### Fixed
 
 - **Focus indicators were suppressed in three places** — `textarea:focus`, the

@@ -59,8 +59,6 @@
     --ok-color:       #4caf50;       /* .icon-btn.ok */
     --hard-toggle-fg: #555555;
     --dsl-fg:         #333333;
-    --shadow-strong:  rgba(0,0,0,.25);
-    --shadow-soft:    rgba(0,0,0,.20);
     --modal-backdrop: rgba(0,0,0,.45);
 
     /* Badge fills (semantic tinted panels). */
@@ -199,8 +197,6 @@
     --ok-color:       #4ade80;
     --hard-toggle-fg: #9ba3ad;
     --dsl-fg:         #d1d5db;
-    --shadow-strong:  rgba(0,0,0,.55);
-    --shadow-soft:    rgba(0,0,0,.45);
     --modal-backdrop: rgba(0,0,0,.65);
 
     --badge-ok-bg:    #1b3a25;
@@ -240,8 +236,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 14px;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
     background: var(--bg);
     color: var(--text);
 }
@@ -250,7 +246,7 @@ a       { color: var(--blue); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 code.mono, .mono {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
@@ -265,11 +261,11 @@ header {
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 2px 4px var(--shadow-soft);
+    box-shadow: var(--shadow-1);
 }
 
 .brand {
-    font-size: 20px;
+    font-size: var(--text-lg);
     font-weight: 700;
     letter-spacing: 1.5px;
 }
@@ -280,8 +276,8 @@ nav a {
     color: var(--nav-link);
     text-decoration: none;
     padding: 6px 13px;
-    border-radius: 3px;
-    font-size: 14px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-base);
     transition: background .12s;
 }
 nav a:hover  { background: var(--nav-link-hover-bg); color: var(--header-fg); }
@@ -292,7 +288,7 @@ nav a.active { background: var(--nav-link-active-bg); color: var(--header-fg); f
     background: transparent;
     border: none;
     color: var(--header-fg);
-    font-size: 22px;
+    font-size: var(--text-xl);
     cursor: pointer;
 }
 
@@ -331,14 +327,14 @@ main {
 .card {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 16px;
     min-width: 230px;
     flex: 1 1 320px;
 }
 
 .card h3 {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .8px;
@@ -358,7 +354,7 @@ form label,
 .card label:not([class]) {
     display: block;
     margin: 6px 0;
-    font-size: 13px;
+    font-size: var(--text-sm);
     color: var(--text);
 }
 form input[type=text],
@@ -375,28 +371,30 @@ form select,
     width: 100%;
     padding: 7px 10px;
     border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 14px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-base);
     background: var(--surface-input);
     color: var(--text);
 }
-form input:focus,
-form select:focus,
-.card label:not([class]) input:focus,
-.card label:not([class]) select:focus,
-.field-input:focus {
-    outline: none;
-    border-color: var(--blue);
+textarea:focus-visible,
+.field-input:focus-visible,
+form input:focus-visible,
+form select:focus-visible,
+.card label:not([class]) input:focus-visible,
+.card label:not([class]) select:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-color: var(--border-strong);
 }
 
 .field-label {
     display: block;
     margin: 10px 0 4px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--muted);
 }
 .field-hint {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--muted);
     margin-top: 4px;
 }
@@ -406,16 +404,16 @@ form select:focus,
     font-style: italic;
 }
 .error-text { color: var(--danger); padding: 12px 4px; }
-.muted      { color: var(--muted); font-size: 12px; }
+.muted      { color: var(--muted); font-size: var(--text-xs); }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
 button {
     padding: 7px 14px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     background: var(--surface);
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--text-base);
     cursor: pointer;
     transition: background .12s, border-color .12s;
 }
@@ -443,7 +441,7 @@ button.danger:hover:not(:disabled) { background: var(--danger-strong); border-co
 
 button.small {
     padding: 4px 10px;
-    font-size: 12px;
+    font-size: var(--text-xs);
 }
 
 .btn-strip { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -454,7 +452,7 @@ button.small {
     border-collapse: collapse;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     overflow: hidden;
 }
 .data-table th,
@@ -462,12 +460,12 @@ button.small {
     padding: 8px 12px;
     text-align: left;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: var(--text-sm);
 }
 .data-table th {
     background: var(--surface-soft);
     font-weight: 700;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: .5px;
     color: var(--muted);
@@ -480,7 +478,7 @@ button.small {
 .kv-table th {
     text-align: left;
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--muted);
     padding: 4px 12px 4px 0;
     vertical-align: top;
@@ -488,25 +486,25 @@ button.small {
 }
 .kv-table td {
     padding: 4px 0;
-    font-size: 13px;
+    font-size: var(--text-sm);
 }
 
 /* ── Device list specifics ─────────────────────────────────────────── */
 .act-group { display: inline-flex; }
 .act-btn {
     width: 26px; height: 26px; border: none; cursor: pointer;
-    display: grid; place-items: center; padding: 0; font-size: 12px; color: var(--on-accent);
+    display: grid; place-items: center; padding: 0; font-size: var(--text-xs); color: var(--on-accent);
 }
-.act-btn.edit   { background: var(--edit-btn-bg); border-radius: 3px 0 0 3px; }
+.act-btn.edit   { background: var(--edit-btn-bg); border-radius: var(--radius-control) 0 0 var(--radius-control); }
 .act-btn.edit:hover { background: var(--edit-btn-hover); }
-.act-btn.del    { background: var(--danger); border-radius: 0 3px 3px 0; }
+.act-btn.del    { background: var(--danger); border-radius: 0 var(--radius-control) var(--radius-control) 0; }
 .act-btn.del:hover { background: var(--danger-strong); }
 
 .hard-toggle {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--hard-toggle-fg);
     padding: 0 6px;
     user-select: none;
@@ -519,8 +517,8 @@ button.small {
 .badge {
     display: inline-block;
     padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
+    border-radius: var(--radius-card);
+    font-size: var(--text-2xs);
     font-weight: 700;
 }
 .badge-ok   { background: var(--badge-ok-bg);   color: var(--success); }
@@ -541,7 +539,7 @@ button.small {
     cursor: pointer;
     inset: 0;
     background: var(--toggle-track);
-    border-radius: 21px;
+    border-radius: var(--radius-pill);
     transition: .2s;
 }
 .toggle-slider::before {
@@ -552,7 +550,7 @@ button.small {
     background: var(--toggle-knob);
     border-radius: 50%;
     transition: .2s;
-    box-shadow: 0 1px 3px var(--shadow-strong);
+    box-shadow: var(--shadow-1);
 }
 .toggle input:checked + .toggle-slider         { background: var(--blue); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(17px); }
@@ -571,7 +569,7 @@ button.small {
 .dev-wrapper {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     overflow: hidden;
 }
 .dev-tabs {
@@ -583,14 +581,14 @@ button.small {
     padding: 10px 16px;
     color: var(--muted);
     border-bottom: 2px solid transparent;
-    font-size: 13px;
+    font-size: var(--text-sm);
     text-decoration: none;
 }
 .dev-tabs .tab:hover  { color: var(--text); text-decoration: none; }
 .dev-tabs .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 700; }
 
 .tab-panel { padding: 16px; }
-.tab-hint  { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.tab-hint  { font-size: var(--text-sm); color: var(--muted); margin-bottom: 12px; }
 
 .dev-bottom-bar {
     border-top: 1px solid var(--border);
@@ -600,8 +598,8 @@ button.small {
 
 /* ── DSL + code ────────────────────────────────────────────────────── */
 .dsl {
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     color: var(--dsl-fg);
     white-space: pre;
     overflow: hidden;
@@ -612,22 +610,21 @@ button.small {
 
 textarea {
     width: 100%;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     padding: 8px;
     resize: vertical;
     background: var(--surface-input);
     color: var(--text);
 }
-textarea:focus { outline: none; border-color: var(--blue); }
 
 /* ── Code editor (gutter + textarea) ──────────────────────────────── */
 .code-editor {
     display: flex;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     overflow: hidden;
     background: var(--surface);
 }
@@ -636,8 +633,8 @@ textarea:focus { outline: none; border-color: var(--blue); }
     padding: 8px 6px;
     background: var(--gutter-bg);
     border-right: 1px solid var(--border);
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     color: var(--muted);
     overflow: hidden;
     user-select: none;
@@ -648,24 +645,27 @@ textarea:focus { outline: none; border-color: var(--blue); }
     border: none;
     border-radius: 0;
     padding: 8px;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     line-height: 1.5;
-    outline: none;
     resize: vertical;
     background: var(--surface);
     color: var(--text);
+}
+.code-editor-input:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
 }
 
 /* ── Log viewer ────────────────────────────────────────────────────── */
 #log-viewer {
     background: var(--log-bg);
     color: var(--log-text);
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
     line-height: 1.5;
     padding: 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     height: calc(100vh - 148px);
     overflow-y: auto;
     white-space: pre-wrap;
@@ -678,8 +678,8 @@ textarea:focus { outline: none; border-color: var(--blue); }
 .log-D { color: var(--log-debug); }
 .log-V { color: var(--log-verb); }
 
-.check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-.check-label select { padding: 2px 6px; font-size: 12px; }
+.check-label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
+.check-label select { padding: 2px 6px; font-size: var(--text-xs); }
 
 /* ── Modal ─────────────────────────────────────────────────────────── */
 .modal {
@@ -694,7 +694,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
 .modal-box {
     background: var(--surface);
     color: var(--text);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 20px;
     width: 90%;
     max-width: 540px;
@@ -702,7 +702,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     overflow-y: auto;
     border: 1px solid var(--border);
 }
-.modal-box h3   { margin-bottom: 14px; font-size: 16px; }
+.modal-box h3   { margin-bottom: 14px; font-size: var(--text-md); }
 .modal-body     { margin-bottom: 6px; }
 .modal-footer   { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
@@ -712,11 +712,11 @@ textarea:focus { outline: none; border-color: var(--blue); }
     bottom: 24px; left: 50%;
     transform: translateX(-50%);
     padding: 10px 18px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     background: var(--toast-default-bg);
     color: var(--toast-default-fg);
-    font-size: 13px;
-    box-shadow: 0 4px 14px var(--shadow-strong);
+    font-size: var(--text-sm);
+    box-shadow: var(--shadow-3);
     z-index: 300;
     animation: toastIn .15s ease-out;
 }
@@ -759,9 +759,9 @@ textarea:focus { outline: none; border-color: var(--blue); }
     gap: 4px;
     background: var(--chip-bg);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     padding: 3px 10px;
-    font-size: 12px;
+    font-size: var(--text-xs);
 }
 .chip button {
     background: transparent;
@@ -799,13 +799,13 @@ textarea:focus { outline: none; border-color: var(--blue); }
         flex-direction: column; gap: 0;
         background: var(--blue);
         padding: 4px 0;
-        box-shadow: 0 4px 12px var(--shadow-strong);
+        box-shadow: var(--shadow-2);
         z-index: 99;
     }
     nav.open { display: flex; }
     nav a {
         padding: 11px 16px;
-        font-size: 14px;
+        font-size: var(--text-base);
         white-space: normal;
         border-radius: 0;
     }
@@ -843,29 +843,29 @@ textarea:focus { outline: none; border-color: var(--blue); }
 .editable-label-text { font-weight: 500; }
 .icon-btn {
     background: transparent; border: 1px solid var(--border);
-    color: var(--text); border-radius: 3px; padding: 2px 8px;
-    font-size: 13px; line-height: 1.2; cursor: pointer;
+    color: var(--text); border-radius: var(--radius-control); padding: 2px 8px;
+    font-size: var(--text-sm); line-height: 1.2; cursor: pointer;
 }
 .icon-btn:hover { background: var(--card-bg); }
 .icon-btn.ok { color: var(--ok-color); border-color: var(--ok-color); }
 .icon-btn[disabled] { opacity: .4; cursor: wait; }
 
-.ro-val { color: var(--text); font-family: monospace; }
+.ro-val { color: var(--text); font-family: var(--font-mono); }
 .ro-tag {
-    color: var(--muted); font-size: 11px; font-style: italic;
-    padding: 2px 6px; border-radius: 3px; background: var(--card-bg);
+    color: var(--muted); font-size: var(--text-2xs); font-style: italic;
+    padding: 2px 6px; border-radius: var(--radius-control); background: var(--card-bg);
 }
-.ro-unit { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.ro-unit { color: var(--muted); font-size: var(--text-xs); margin-left: 6px; }
 
 /* ───── LuaEditor (CodeMirror 6) ───────────────────────────────────── */
 .lua-editor-wrap { display: flex; flex-direction: column; gap: 6px; }
 .lua-editor-toolbar {
     display: flex; align-items: center; gap: 10px;
-    font-size: 11px; color: var(--muted);
+    font-size: var(--text-2xs); color: var(--muted);
 }
 .lua-editor-toolbar code {
-    background: var(--row-a); padding: 1px 4px; border-radius: 3px;
-    font-size: 10px; margin: 0 2px;
+    background: var(--row-a); padding: 1px 4px; border-radius: var(--radius-control);
+    font-size: var(--text-2xs); margin: 0 2px;
 }
 .lua-editor {
     width: 100%;
@@ -882,7 +882,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
 }
 .lua-editor .cm-editor { height: 100%; }
 .lua-editor-fallback .err-text {
-    color: var(--danger); font-size: 12px; margin: 4px 0;
+    color: var(--danger); font-size: var(--text-xs); margin: 4px 0;
 }
 /* Modals holding an editor should grow rather than trap content under
  * the footer on short viewports. */
@@ -894,7 +894,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     gap: 0;
     margin: 8px 0 12px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     overflow: hidden;
 }
 .tabs .tab {
@@ -904,7 +904,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     border: 0;
     border-radius: 0;
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-sm);
     color: var(--muted);
 }
 .tabs .tab.active {
@@ -914,22 +914,22 @@ textarea:focus { outline: none; border-color: var(--blue); }
 
 /* Inline DSL help. */
 .rule-help { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
-.rule-help h4 { margin: 10px 0 4px; font-size: 13px; color: var(--text); }
-.rule-help p  { margin: 4px 0; font-size: 13px; }
-.rule-help ul.dsl-limits { font-size: 12px; color: var(--muted); margin: 4px 0; padding-left: 18px; }
+.rule-help h4 { margin: 10px 0 4px; font-size: var(--text-sm); color: var(--text); }
+.rule-help p  { margin: 4px 0; font-size: var(--text-sm); }
+.rule-help ul.dsl-limits { font-size: var(--text-xs); color: var(--muted); margin: 4px 0; padding-left: 18px; }
 
 /* Inline Lua help — same pattern as .rule-help. */
 .script-help { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
-.script-help h4 { margin: 10px 0 4px; font-size: 13px; color: var(--text); }
-.script-help p  { margin: 4px 0; font-size: 13px; }
-.script-help ul { font-size: 12px; color: var(--muted); margin: 4px 0; padding-left: 18px; }
+.script-help h4 { margin: 10px 0 4px; font-size: var(--text-sm); color: var(--text); }
+.script-help p  { margin: 4px 0; font-size: var(--text-sm); }
+.script-help ul { font-size: var(--text-xs); color: var(--muted); margin: 4px 0; padding-left: 18px; }
 
 .dsl-snippet {
     background: var(--bg-alt, #f6f8fa);
     padding: 8px 10px;
-    border-radius: 4px;
-    font-family: ui-monospace, SFMono-Regular, monospace;
-    font-size: 13px;
+    border-radius: var(--radius-control);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
     line-height: 1.5;
     overflow-x: auto;
     white-space: pre;
@@ -944,7 +944,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     position: relative;
     height: 26px;
     background: var(--bg-alt, #f6f8fa);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     margin-top: 10px;
     overflow: hidden;
     border: 1px solid var(--border, #d0d7de);
@@ -964,7 +964,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text, #1f2328);
     mix-blend-mode: difference;
@@ -988,7 +988,7 @@ textarea:focus { outline: none; border-color: var(--blue); }
     color: var(--text);
 }
 .splash-brand, .login-brand {
-    font-size: 28px;
+    font-size: var(--text-2xl);
     letter-spacing: 1px;
     color: var(--blue);
 }
@@ -1003,20 +1003,20 @@ textarea:focus { outline: none; border-color: var(--blue); }
     padding: 28px 24px;
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-2);
 }
 .login-card .login-brand { text-align: center; }
-.login-title { margin: 0; font-size: 20px; }
+.login-title { margin: 0; font-size: var(--text-lg); }
 .login-lead  { margin: 0; color: var(--muted); }
-.login-field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.login-field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-base); }
 .login-field input {
     padding: 10px 12px;
-    font-size: 15px;
+    font-size: var(--text-base);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--surface-input);
     color: var(--text);
 }
 .login-card button { width: 100%; padding: 10px 12px; }
-.login-hint { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.login-hint { margin: 4px 0 0; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }

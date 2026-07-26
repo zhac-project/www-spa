@@ -24,8 +24,37 @@ const REQUIRED = [
 const fail = [];
 const declares = (src, t) => new RegExp(`^\\s*${t}\\s*:`, 'm').test(src);
 
-const missing = REQUIRED.filter((t) => !declares(SRC, t));
-if (missing.length) fail.push(`missing tokens: ${missing.join(', ')}`);
+// Extract a single brace-balanced rule block starting at the `{` that follows
+// `selectorStart`. Returns the block INCLUDING both braces, or null if the
+// selector wasn't found, or the braces never balance (e.g. a truncated file).
+// This is what makes the dark-block and :root probes below scoped to the
+// actual rule body instead of "everything from here to EOF".
+const extractBlock = (src, selectorStart) => {
+  if (selectorStart < 0) return null;
+  const braceStart = src.indexOf('{', selectorStart);
+  if (braceStart < 0) return null;
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(braceStart, i + 1);
+    }
+  }
+  return null;
+};
+
+// Light `:root { ... }`. Matched with a regex requiring `{` directly (modulo
+// whitespace) after `:root`, so it can't also match
+// `:root[data-theme="dark"] { ... }` (which has `[` right after `:root`).
+const lightMatch = /:root\s*\{/.exec(SRC);
+const lightBlock = lightMatch ? extractBlock(SRC, lightMatch.index) : null;
+if (!lightBlock) {
+  fail.push('no :root { } block (or its braces do not balance)');
+} else {
+  const missing = REQUIRED.filter((t) => !declares(lightBlock, t));
+  if (missing.length) fail.push(`missing tokens: ${missing.join(', ')}`);
+}
 
 // A media query here would double-drive the theme and fight ui.js's mirroring,
 // breaking the explicit "light" override.
@@ -34,16 +63,31 @@ if (/@media[^{]*prefers-color-scheme/.test(SRC)) {
 }
 
 const darkAt = SRC.indexOf(':root[data-theme="dark"]');
-if (darkAt < 0) fail.push('no :root[data-theme="dark"] block');
-else {
-  const dark = SRC.slice(darkAt);
-  for (const t of ['--bg', '--card-bg', '--text', '--border', '--surface', '--blue']) {
-    if (!declares(dark, t)) fail.push(`${t} not overridden in the dark block`);
+if (darkAt < 0) {
+  fail.push('no :root[data-theme="dark"] block');
+} else {
+  const darkBlock = extractBlock(SRC, darkAt);
+  if (!darkBlock) {
+    fail.push('dark block braces do not balance');
+  } else {
+    for (const t of ['--bg', '--card-bg', '--text', '--border', '--surface', '--blue']) {
+      if (!declares(darkBlock, t)) fail.push(`${t} not overridden in the dark block`);
+    }
   }
 }
 
 // Tier A ships zero font bytes.
 if (/@font-face|fontsource/i.test(SRC)) fail.push('font files present — Tier A is system-stack only');
+
+// Custom-property values are unvalidated token streams at declaration time,
+// so a later `oklch()` line for the same property always wins the cascade
+// regardless of browser support — the hex line above it is not a fallback.
+// var() substitution is then all-or-nothing at computed-value time, so a
+// browser that can't parse oklch() does NOT fall back to the hex value; the
+// consuming property goes invalid (inherit/initial). Hex-only, always.
+if (/oklch\(/.test(SRC)) {
+  fail.push('oklch( present in styles.css — hex-only tokens, no cascade "fallback" (see review finding)');
+}
 
 if (fail.length) {
   console.error('token contract FAILED:');

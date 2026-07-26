@@ -12,24 +12,18 @@
 :root {
     color-scheme: light dark;
 
-    --blue:      #3b6ea5;
-    --blue:      oklch(0.56 0.12 250);
-    --blue-dark: #33608f;
-    --blue-dark: oklch(0.5 0.12 250);
+    --blue:      #3578b8;
+    --blue-dark: #2266a4;
     --bg:        #eef0f2;
     --bg-alt:    #e9ecef;
     --card-bg:   #ffffff;
     --border:    #e6e9ed;
     --text:      #1d2530;
     --muted:     #5c6470;
-    --success:   #3f9668;
-    --success:   oklch(0.6 0.12 150);
-    --warn:      #a87420;
-    --warn:      oklch(0.65 0.13 70);
-    --danger:    #a33a2c;
-    --danger:    oklch(0.5 0.15 25);
-    --danger-strong: #8a3025;
-    --danger-strong: oklch(0.44 0.15 25);
+    --success:   #439458;
+    --warn:      #c17f21;
+    --danger:    #a83634;
+    --danger-strong: #942124;
     --log-bg:    #1e1e1e;
     --log-text:  #d4d4d4;
     --row-a:     #f7f8f9;
@@ -160,23 +154,18 @@
  *   "dark"   → forced dark, ignore OS
  * The Settings page exposes the chooser. */
 :root[data-theme="dark"] {
-    --blue:      #5e9ad4;
-    --blue:      oklch(0.68 0.12 250);
-    --blue-dark: #7aaee2;
-    --blue-dark: oklch(0.74 0.12 250);
+    --blue:      #5b9ddf;
+    --blue-dark: #6db0f4;
     --bg:        #141a22;
     --bg-alt:    #1a212b;
     --card-bg:   #1d2530;
     --border:    #2a3340;
     --text:      #eef0f2;
     --muted:     #9aa3b0;
-    --success:   #5cae7f;
-    --success:   oklch(0.68 0.12 150);
-    --warn:      #b98a35;
-    --warn:      oklch(0.7 0.13 70);
-    --danger:    #d3705c;
-    --danger:    oklch(0.66 0.14 25);
-    --danger-strong: #ef4444;
+    --success:   #5dad70;
+    --warn:      #d18e35;
+    --danger:    #db6c66;
+    --danger-strong: #db6c66;
     --log-bg:    #0b0d11;
     --log-text:  #d4d4d4;
     --row-a:     #1d2530;

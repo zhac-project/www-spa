@@ -305,11 +305,15 @@ nav a.active { background: var(--nav-link-active-bg); color: var(--header-fg); f
  * for a live status light. A --header-fg ring solves it structurally — that
  * colour is guaranteed to contrast with the header, since it is what makes the
  * header's own text legible. The fill then only has to distinguish the three
- * states from each other, which it does. */
+ * states from each other, which it does.
+ *
+ * The ring is --bg, NOT --header-fg: --header-fg is white in both themes, and
+ * the dark header fill is a LIGHT blue, so a white ring only reaches 2.86:1
+ * there. --bg flips with the theme, giving 4.06:1 light and 6.11:1 dark. */
 .ws-dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--ws-default); margin-left: auto; transition: background .3s;
-    box-shadow: 0 0 0 2px var(--header-fg);
+    box-shadow: 0 0 0 2px var(--bg);
 }
 .ws-dot.connected    { background: var(--ws-connected); }
 .ws-dot.disconnected { background: var(--ws-disconnected); }

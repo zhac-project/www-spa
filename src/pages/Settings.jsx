@@ -102,6 +102,28 @@ export function SettingsPage() {
 
     return (
         <div class="page">
+            {d.storage_error && (
+                <Card title="Storage error">
+                    <p>
+                        The hub could not use its storage when it started, so devices, rules,
+                        names and passwords could not be read. <strong>Nothing was erased.</strong>{" "}
+                        Sign-in works only with the token printed on the serial console.
+                    </p>
+                    <p class="muted">
+                        Erasing storage gives you a fresh hub: pair the devices again, then restore
+                        your last backup for names, rules and scripts. The Zigbee network keys are
+                        lost with the erase, so every device must pair again.
+                    </p>
+                    <button class="danger small"
+                            onClick={async () => {
+                                if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
+                                try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
+                                catch (e) { showToast("Erase failed: " + e.message, "err"); }
+                            }}>
+                        Erase storage and restart
+                    </button>
+                </Card>
+            )}
             <div class="cards">
                 <Card title="Appearance">
                     <div class="theme-radio-group" role="radiogroup" aria-label="Theme">

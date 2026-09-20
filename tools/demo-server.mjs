@@ -17,6 +17,7 @@
 //   DEMO_AUTH=setup npm run demo       # fresh hub: sign-in on, no password, set-up window open
 //   DEMO_AUTH=closed npm run demo      # ... powered on > 10 min ago: set-up refused until a power cycle
 //   DEMO_AUTH=storage npm run demo     # sign-in storage unreadable: locked, serial token only
+//   DEMO_STORAGE_ERROR=1 npm run demo  # NVS unusable at boot: Settings offers "Erase storage and restart"
 //   DEMO_JOIN=unsupported npm run demo # "Add a device": the joining device has no definition
 //   DEMO_JOIN=none npm run demo        # "Add a device": nothing joins (the two-minute timeout path)
 //
@@ -134,6 +135,7 @@ function status() {
         ntp_server: demoNtpServer,
         ...(process.env.DEMO_NTP_DHCP && demoNtpServer === "pool.ntp.org" ? { ntp_dhcp_server: "192.168.1.1" } : {}),
         ota: true, fw: "v2026091801",
+        ...(process.env.DEMO_STORAGE_ERROR ? { storage_error: true } : {}),
         ota_state: process.env.DEMO_OTA_PENDING ? "pending" : "verified",
         ...(process.env.DEMO_OTA_ROLLBACK ? { ota_rollback_reason: "Zigbee radio not ready (it was before the update)" } : {}),
         auth_enabled: false,
@@ -214,6 +216,7 @@ const COMMANDS = {
     "alerts.get": () => [],
     "logs.get": logs,
     "diagnostics.unhandled.get": () => ({ entries: [] }),
+    "system.storage_reset": () => ({}),
     "zigbee.permit_join": (a, push) => {
         permitUntil = Date.now() + (a.duration | 0) * 1000;
         // A device joins 6 s after pairing opens and finishes its interview 5 s

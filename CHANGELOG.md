@@ -10,6 +10,9 @@ across the ZHAC platform.
 
 ### Added
 
+- **Storage error card** on Settings (`storage_error`): explains that nothing was erased, what an
+  erase costs, and offers "Erase storage and restart" behind a confirmation.
+
 - **Restore preview.** Before a restore the confirm dialog says when and where the backup was
   made, what it holds (names, rules with how many enabled, scripts, collections), which saved
   names have no paired device here and will be skipped, and what a backup never contains

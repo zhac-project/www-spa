@@ -503,7 +503,7 @@ function CommandRow({ ieee, expose }) {
             <tr>
                 <td><code class="mono">{name}</code></td>
                 <td>
-                    <select value={val} onChange={(e) => setVal(e.currentTarget.value)} disabled={busy}
+                    <select value={val} aria-label={name} onChange={(e) => setVal(e.currentTarget.value)} disabled={busy}
                             style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control)">
                         {values.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
@@ -518,7 +518,7 @@ function CommandRow({ ieee, expose }) {
             <td><code class="mono">{name}</code></td>
             <td>
                 {isNumeric ? (
-                    <input type="number" value={val}
+                    <input type="number" value={val} step="any" aria-label={name}
                            onInput={(e) => setVal(e.currentTarget.value)}
                            onKeyDown={(e) => { if (e.key === "Enter") send(); }}
                            style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-control);width:160px" />

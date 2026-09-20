@@ -94,6 +94,7 @@ export function App() {
         );
     }
     if (st === "needsSetup") return <Login setup />;
+    if (st === "setupClosed") return <Login setup closed />;
     if (st === "needsAuth") return <Login />;
     return <AppShell />;
 }

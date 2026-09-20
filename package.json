@@ -8,7 +8,9 @@
     "prebuild": "npm run gen:completions && npm run check:tokens",
     "build": "vite build",
     "preview": "vite preview",
-    "check:tokens": "node tools/check-tokens.mjs"
+    "check:tokens": "node tools/check-tokens.mjs",
+    "demo": "node tools/demo-server.mjs",
+    "test": "node --test \"test/**/*.test.mjs\""
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",

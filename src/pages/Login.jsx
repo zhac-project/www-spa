@@ -8,15 +8,61 @@
 //    raw 32-char API token (serial-log workflow / older firmware).
 // On success the token is stored and the page reloads so the WebSocket
 // re-handshakes with it (the same flow Settings uses).
-import { useState } from "preact/hooks";
-import { authError, submitToken, submitPassword, submitSetup } from "../stores/auth.js";
+import { useEffect, useState } from "preact/hooks";
+import { authError, setupSecsLeft, probeAuth,
+         submitToken, submitPassword, submitSetup } from "../stores/auth.js";
 
-export function Login({ setup = false }) {
+// The first-claim window closed (hub powered on > 10 min ago, no password).
+// Nothing to type: the only way forward is a power cycle, then a reload.
+function SetupClosed() {
+    const [busy, setBusy] = useState(false);
+    async function retry() { setBusy(true); await probeAuth(); setBusy(false); }
+    return (
+        <div class="login-gate">
+            <div class="login-card">
+                <span class="brand login-brand">ZHAC</span>
+                <h2 class="login-title">Set-up window closed</h2>
+                <p class="login-lead">
+                    This hub has no admin password yet, but it only lets one be set in the
+                    first 10 minutes after it is powered on. That time has passed.
+                </p>
+                <ol class="login-steps">
+                    <li>Unplug the hub's power, wait a few seconds, plug it back in.</li>
+                    <li>Wait for it to come back (about half a minute).</li>
+                    <li>Press <strong>Try again</strong> and set the password within 10 minutes.</li>
+                </ol>
+                <button class="primary" onClick={retry} disabled={busy}>
+                    {busy ? "Checking…" : "Try again"}
+                </button>
+                <p class="login-hint">
+                    This keeps a hub that was never set up from being claimed by whoever finds
+                    it on the network later. Only someone who can reach its power can open it.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+export function Login({ setup = false, closed = false }) {
     const [pw, setPw]           = useState("");
     const [confirm, setConfirm] = useState("");
     const [useToken, setUseToken] = useState(false);
     const [busy, setBusy]       = useState(false);
     const err = authError.value;
+    const left = setupSecsLeft.value;
+
+    // Countdown while the set-up card is open; at zero the store flips to
+    // "setupClosed" on the next probe, so re-probe then.
+    useEffect(() => {
+        if (!setup || closed || left < 0) return;
+        const t = setInterval(() => {
+            if (setupSecsLeft.value > 0) setupSecsLeft.value -= 1;
+            else { clearInterval(t); probeAuth(); }
+        }, 1000);
+        return () => clearInterval(t);
+    }, [setup, closed, left < 0]);
+
+    if (closed) return <SetupClosed />;
 
     async function onSubmit(e) {
         e.preventDefault();
@@ -36,7 +82,9 @@ export function Login({ setup = false }) {
                 <h2 class="login-title">{setup ? "Set admin password" : "Sign in"}</h2>
                 <p class="login-lead">
                     {setup
-                        ? "First boot: choose the admin password for this controller."
+                        ? "First boot: choose the admin password for this hub." +
+                          (left > 0 ? ` You have ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left` +
+                                      " before the hub closes set-up; a power cycle reopens it." : "")
                         : useToken
                             ? "Paste the 32-character API token."
                             : "Enter the admin password."}

@@ -1,6 +1,7 @@
 # Contributing to www-spa
 
-ZHAC Web UI — Preact 10 + Vite 5 single-page app.
+ZHAC Web UI — Preact 10 + Vite 8 single-page app, served by every ZHAC firmware
+(dual-chip S3, single-chip S3, wired P4/S31).
 
 ## License and CLA
 
@@ -14,14 +15,22 @@ npm ci
 npm run dev
 ```
 
-Dev server at http://localhost:5173, `/ws` proxied to
-`ws://localhost:8080`. You need an S3 firmware (or a stub)
-listening on port 8080 for the UI to function.
+Dev server at http://localhost:5173, `/ws` and `/api` proxied to
+`localhost:8080`. No hardware? Run the demo hub there — it answers the
+same commands as a wired hub, with six realistic devices:
+
+```bash
+npm run demo     # terminal 1: fake hub on :8080
+npm run dev      # terminal 2: hot-reload UI on :5173
+```
+
+With real firmware instead, point the proxy at your hub's address in
+`vite.config.js`.
 
 ## Build for production
 
 ```bash
-npm run build    # → dist/ (consumed by zhac-net-core SPIFFS)
+npm run build    # → dist/ (packed into the firmware's SPIFFS partition)
 ```
 
 ## SPDX headers for new files
@@ -42,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 ## Code style
 
-- 2-space indent, single quotes, `camelCase`.
+- 4-space indent, double quotes, `camelCase` — match the file you are in.
 - Prefer `@preact/signals` over `useState` / `useReducer`.
 - No Redux, no Context-API for cross-cutting state — signals handle it.
 - Components in `src/components/` should be stateless where possible.
@@ -62,16 +71,19 @@ semantically-related modules so one open = one HTTP round-trip.
 
 ## Testing
 
-```bash
-npm test -- --run
-```
+There is no automated test suite. What runs today:
 
-Tests use Vitest + @testing-library/preact.
+- `npm run build` runs `tools/check-tokens.mjs` first and fails on any
+  design token that does not resolve.
+- Check UI changes by hand against the demo hub (`npm run demo`), in
+  light and dark theme and at phone width.
+- Anything that talks to a new firmware command also needs a run on real
+  hardware before release — the demo hub only proves the UI side.
 
 ## Generated completion data
 
-Lua autocomplete data is generated from `docs/LUA_API.md` (in the
-`zhac-platform` repo) via `tools/gen-zhac-completions.js`. The
+Lua autocomplete data is generated from `LUA_API.md` (in the
+`zhac-docs` repo) via `tools/gen-zhac-completions.js`. The
 generated `src/editor/zhac-completions.js` is committed.
 
 If the API reference changes in the platform repo, regenerate:
@@ -84,8 +96,9 @@ A `prebuild` hook also runs this before every `npm run build`.
 
 ## Reporting bugs
 
-Open an issue with:
+Use the [bug report form](https://github.com/zhac-project/zhac-platform/issues/new?template=bug.yml).
+Useful extras for UI bugs:
 - Browser + version
-- S3 firmware version (from UI footer or `zhac status`)
+- Firmware and web UI version (Info page)
 - Minimal repro (URL path + action sequence)
 - Network tab: the failing WS frame, if any

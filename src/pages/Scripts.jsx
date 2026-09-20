@@ -3,6 +3,7 @@
 // Lua script list + editor.
 // Scripts are named (lowercase, [-_a-z0-9], max 24 chars); file size reported
 // by the server. Editor uses the plain CodeEditor component (textarea + gutter).
+import { SCRIPT_TEMPLATES } from "../templates.js";
 import { useState } from "preact/hooks";
 import { scripts, bootstrapScripts, readScript, writeScript,
          deleteScript as delScript, runScript } from "../stores/scripts.js";
@@ -99,6 +100,21 @@ export function ScriptsPage() {
                    </>}>
                 {editing && (
                     <>
+                        {editing.isNew && (
+                            <>
+                                <label class="field-label">Start from a template</label>
+                                <select class="field-input" value=""
+                                        onChange={(e) => {
+                                            const t = SCRIPT_TEMPLATES[Number(e.currentTarget.value)];
+                                            if (t) setEditing({ ...editing, name: t.name, src: t.src });
+                                        }}>
+                                    <option value="">— blank script —</option>
+                                    {SCRIPT_TEMPLATES.map((t, i) => <option key={i} value={i}>{t.title}</option>)}
+                                </select>
+                                <p class="field-hint">Replace the CAPITALISED IEEE placeholders with your devices'
+                                    addresses (device page → Info).</p>
+                            </>
+                        )}
                         <label class="field-label">Name</label>
                         <input class="field-input"
                                value={editing.name}

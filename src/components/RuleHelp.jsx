@@ -19,7 +19,7 @@ export function RuleHelp() {
             <p><b>Device attribute change</b> — fires when a device reports a value:</p>
             <pre class="dsl-snippet">{`ON <device>#<attr>[<op><value>] DO ... ENDON`}</pre>
             <p class="field-hint">Operators: <code>=</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>; omit for "any change".</p>
-            <pre class="dsl-snippet">{`ON kitchen switch#action=single DO zigbee.set kitchen_light state 1 ENDON
+            <pre class="dsl-snippet">{`ON kitchen switch#action="single" DO zigbee.set kitchen_light state 1 ENDON
 ON 0x001234567890ABCD#temperature>2500 DO publish home/alert hot ENDON
 ON door sensor#contact DO event motion ENDON`}</pre>
 
@@ -64,9 +64,9 @@ ON Rules#Timer=0 DO zigbee.set hallway_light state 0 ENDON`}</pre>
             <pre class="dsl-snippet">ON front door#contact=0 DO publish home/door opened ; log door opened ENDON</pre>
 
             <p><b>Toggle binary attr (single-rule, no script needed)</b></p>
-            <pre class="dsl-snippet">ON kitchen switch#action=single DO zigbee.toggle kitchen_light state ENDON</pre>
+            <pre class="dsl-snippet">ON kitchen switch#action="single" DO zigbee.toggle kitchen_light state ENDON</pre>
             <p class="field-hint">Only works for binary attrs (0/1). For non-binary attrs, use a Lua script instead:</p>
-            <pre class="dsl-snippet">{`ON kitchen switch#action=single DO script.run "toggle_kitchen_light" ENDON
+            <pre class="dsl-snippet">{`ON kitchen switch#action="single" DO script.run "toggle_kitchen_light" ENDON
 // scripts/toggle_kitchen_light.lua:
 //   local cur = zhac.get_attr("0x...", "brightness")
 //   zhac.set_attr("0x...", "brightness", cur == 0 and 128 or 0)`}</pre>
@@ -74,11 +74,12 @@ ON Rules#Timer=0 DO zigbee.set hallway_light state 0 ENDON`}</pre>
             <h4>Limits</h4>
             <ul class="dsl-limits">
                 <li>Actions per rule: 4</li>
-                <li>Device ref: 63 chars</li>
-                <li>Attribute key: 31 chars</li>
+                <li>Device name: 29 chars</li>
+                <li>Attribute key: 27 chars</li>
                 <li>Cron expression: 63 chars</li>
-                <li>Event name: 31 chars</li>
-                <li>Timer indices: 0–7</li>
+                <li>Event name: 63 chars</li>
+                <li>MQTT topic: 63 chars</li>
+                <li>Timer indices: 1–8</li>
                 <li>Value expression: 48 chars, 12 operations, parens 6 deep</li>
                 <li>Rule source length: 499 bytes</li>
             </ul>

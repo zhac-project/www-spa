@@ -12,7 +12,7 @@
 :root {
     color-scheme: light dark;
 
-    --blue:      #3578b8;
+    --blue:      #2b6aa6;   /* was #3578b8: 4.06:1 on the sunken table row, below WCAG AA (4.5); this is 4.95:1 */
     --blue-dark: #2266a4;
     --bg:        #eef0f2;
     --bg-alt:    #e9ecef;
@@ -1028,6 +1028,7 @@ textarea {
 .login-card .login-brand { text-align: center; }
 .login-title { margin: 0; font-size: var(--text-lg); }
 .login-lead  { margin: 0; color: var(--muted); }
+.login-steps { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 4px; }
 .login-field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-base); }
 .login-field input {
     padding: 10px 12px;
@@ -1039,3 +1040,34 @@ textarea {
 }
 .login-card button { width: 100%; padding: 10px 12px; }
 .login-hint { margin: 4px 0 0; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
+
+/* Devices page: first-run pairing steps, shown while the list is empty. */
+.card.onboarding { max-width: 720px; }
+.card.onboarding h3 { margin: 0 0 8px; font-size: var(--text-lg); }
+.card.onboarding ol { margin: 0 0 10px; padding-left: 22px; }
+.card.onboarding li { margin: 6px 0; }
+
+/* Info page: help links. */
+.help-links { margin: 0; padding-left: 18px; }
+.help-links li { margin: 6px 0; }
+
+/* Devices page: the Zigbee radio is down. */
+.card.radio-down { max-width: 720px; margin-bottom: 12px; border-left: 4px solid var(--danger); }
+.card.clock-unset { max-width: 720px; margin-bottom: 12px; border-left: 4px solid var(--warn); }
+
+/* Collapsed "Advanced" blocks (OTA page: install from a URL). */
+details.card > summary { cursor: pointer; font-weight: 600; }
+details.card > summary + * { margin-top: 12px; }
+
+/* "Add a device" panel (Devices page). */
+.add-device h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.add-device-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.add-device-list li { padding: 8px 10px; border-radius: 8px; background: var(--surface-sunken); }
+.add-device details { margin-top: 12px; }
+.add-device summary { cursor: pointer; }
+
+/* Rules: recipe builder + list badges. */
+.recipe-preview { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-sunken); }
+.recipe-preview p { margin: 0 0 8px; }
+.dsl-preview { margin: 0 0 8px; white-space: pre-wrap; word-break: break-all; font-size: .85em; }
+.rule-warn { color: var(--danger); font-size: .85em; }

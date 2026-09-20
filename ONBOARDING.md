@@ -1,8 +1,10 @@
 # ONBOARDING — www-spa
 
-You are an AI agent arriving on **www-spa**, ZHAC's Preact 10 + Vite 5
-single-page app. This repo builds the Web UI that's bundled into the
-S3 firmware's SPIFFS partition. Read top-to-bottom before coding.
+You are an AI agent arriving on **www-spa**, ZHAC's Preact 10 + Vite 8
+single-page app. This repo builds the Web UI that every ZHAC firmware
+packs into a SPIFFS partition and serves itself: the dual-chip S3
+(`zhac-net-core`), the single-chip S3 (`zhac-mono-core`) and the wired
+P4/S31 (`zhac-wired-core`). Read top-to-bottom before coding.
 
 ---
 
@@ -13,15 +15,22 @@ S3 firmware's SPIFFS partition. Read top-to-bottom before coding.
 - **ESP32-P4** runs Zigbee coordination (`zhac-main-core`).
 - **ESP32-S3** runs WiFi / REST / WS / MQTT (`zhac-net-core`).
 - They talk over SPI using the custom **HAP** binary protocol.
-- This SPA speaks **WebSocket only** (`/ws`) to the S3 gateway. There
-  is no REST client in the SPA — REST endpoints exist server-side
-  (for external integrations) but the SPA doesn't use them.
+- This SPA speaks **WebSocket** (`/ws`) for everything except a few
+  REST calls: the auth probe (`GET /api/status`, `GET /api/devices`),
+  login/first-boot password (`/api/auth/*`) and Lua upload
+  (`POST /api/scripts/:name`, too big for a WS frame).
+- The same bundle runs on all three firmwares. `status.get` tells them
+  apart: `p4` object present = dual-chip, `sku: "wired"` = Ethernet
+  board, neither = single-chip S3. Hide what a build cannot do rather
+  than letting a command fail.
 
 ### Repo split
 
-Tag `v2026042301` (2026-04-23) baseline. 7 repos:
+Tag `v2026042301` (2026-04-23) baseline. Public repos:
 `zhac-platform`, `embedded-zhc`, `zhac-components`, `zhac-main-core`,
-`zhac-net-core`, **`www-spa`** *(this)*, `zhac-docs`.
+`zhac-net-core`, `zhac-mono-core`, `zhac-wired-core`, **`www-spa`**
+*(this)*, `zhac-docs`. `zhac-wired-core` builds against the sibling
+checkout `../www-spa/dist`; the other firmwares use their own copy.
 
 This repo is additionally **nested as a submodule inside
 `zhac-net-core/`** so a standalone S3 checkout can still build the
@@ -31,11 +40,11 @@ SPIFFS image.
 
 ## 2. What this repo owns
 
-- Preact 10 + `@preact/signals` SPA, ~2 490 LOC across 36 files.
+- Preact 10 + `@preact/signals` SPA.
 - Single WebSocket connection (`/ws`). Envelope:
   `{id, cmd, args}` → `{id, ok, data|err}` + server-push events
   (no `id`).
-- 9 pages, one file per page.
+- 12 pages, one file per page.
 - CodeMirror 6 editor for Lua/DSL editing with zhac-aware
   autocompletion (generated from `docs/LUA_API.md` at build time).
 
@@ -47,15 +56,18 @@ www-spa/
 │   ├── app.jsx                  (top-level router + WS lifecycle)
 │   ├── main.jsx                 (entry)
 │   ├── pages/                   (one file per page)
-│   │   ├── Devices.jsx          (device list)
-│   │   ├── DeviceDetail.jsx     (single device — States / Options / Settings tabs)
-│   │   ├── Groups.jsx           (device groups)
+│   │   ├── Info.jsx             (system info — polls bootstrapStatus every 5 s)
+│   │   ├── Devices.jsx          (device list + permit join)
+│   │   ├── DeviceDetail.jsx     (single device — Info / States / Commands / Bind / Groups / Options tabs)
+│   │   ├── Groups.jsx           ("Collections": gateway-side device groups)
+│   │   ├── ZclGroups.jsx        ("Groups": native Zigbee groups)
 │   │   ├── Rules.jsx            (rules DSL editor)
 │   │   ├── Scripts.jsx          (Lua scripts editor)
 │   │   ├── Logs.jsx             (log ring stream)
-│   │   ├── Diag.jsx             (metrics, HAP stats)
-│   │   ├── Info.jsx             (system info — polls bootstrapStatus every 5 s)
-│   │   └── Settings.jsx         (WiFi, MQTT, system)
+│   │   ├── Diag.jsx             (unhandled frames)
+│   │   ├── Ota.jsx              (firmware update)
+│   │   ├── Settings.jsx         (network, MQTT, Zigbee, auth, uplink)
+│   │   └── Login.jsx            (sign-in + first-boot password)
 │   ├── components/              (shared UI primitives)
 │   ├── editor/                  (CodeMirror theme, autocomplete, linter)
 │   ├── stores/                  (@preact/signals state containers)
@@ -64,7 +76,9 @@ www-spa/
 │   └── styles.css
 ├── public/
 ├── tools/
-│   └── gen-zhac-completions.js  (parses docs/LUA_API.md → completions)
+│   ├── gen-zhac-completions.js  (parses LUA_API.md → completions)
+│   ├── check-tokens.mjs         (design-token guard, runs on prebuild)
+│   └── demo-server.mjs          (fake hub for UI work without hardware)
 ├── index.html
 ├── package.json
 └── vite.config.js               (manualChunks, codemirror lazy-load)
@@ -76,7 +90,7 @@ Runtime: `preact@^10.24`, `@preact/signals@^1.3`,
 `codemirror@^6` + CM autocomplete/commands/language/legacy-modes/
 lint/state/view.
 
-Dev: `@preact/preset-vite@^2.9`, `vite@^5.4`.
+Dev: `@preact/preset-vite@^2.10`, `vite@^8.1`.
 
 Build: `npm run prebuild` auto-runs `gen:completions`, then
 `vite build` → `dist/`.
@@ -89,13 +103,15 @@ Build: `npm run prebuild` auto-runs `gen:completions`, then
 cd www-spa
 npm install
 npm run build             # → dist/ (prebuild regenerates completions)
-npm run dev               # local dev server (proxies /ws to S3 if configured)
+npm run dev               # local dev server (proxies /ws + /api to :8080)
+npm run demo              # fake hub on :8080 — pair it with `npm run dev`
 ```
 
-`dist/` is consumed by `zhac-net-core`'s SPIFFS partition generator
-(`spiffs_create_partition_image` points at `../../../www-spa/dist`).
-Rebuild the SPA **before** telling the user to reflash S3 after any
-UI change.
+`dist/` is packed by the firmware's SPIFFS partition generator.
+`zhac-net-core` packs its **submodule** copy (`zhac-net-core/www-spa/dist`),
+`zhac-wired-core` packs the **sibling** checkout (`../www-spa/dist`).
+`idf.py build` never runs `npm run build`: rebuild the SPA in the right
+checkout **before** telling the user to reflash after any UI change.
 
 ---
 
@@ -125,9 +141,10 @@ its reply comes back.
 
 Stores subscribe via `/ws` handler; components read via signals.
 
-Full dispatch surface: 35 entries, documented in
-`zhac-docs/WS_API.md`. Every entry maps to an `api_*` handler in
-`zhac-net-core/main/api_handlers.cpp`.
+Full dispatch surface is documented in `zhac-docs/WS_API.md`. On the
+dual-chip S3 every entry maps to a route in
+`zhac-net-core/main/api_routes.def`; the single-chip and wired builds
+dispatch in their own `main/ws_bridge.cpp`.
 
 ---
 

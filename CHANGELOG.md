@@ -8,8 +8,101 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Added
+
+- **Restore preview.** Before a restore the confirm dialog says when and where the backup was
+  made, what it holds (names, rules with how many enabled, scripts, collections), which saved
+  names have no paired device here and will be skipped, and what a backup never contains
+  (the Zigbee network, passwords, MQTT and Wi-Fi credentials). Pure logic unit-tested.
+- **Settings → Time shows the router's time server** when the hub uses one (`ntp_dhcp_server`).
+- **"Add a device" reads the hub's `known` flag** to tell a matched device from one the hub has
+  no definition for, instead of guessing from the model name.
+
+- **Numeric command inputs accept decimals** (`step="any"`), so a 21.5 °C setpoint can be
+  typed and sent; the hub now writes it as a decimal instead of truncating or refusing it.
+
+- **Recipes: a first rule without typing.** New Rule opens on a Recipe tab: choose what should
+  happen (motion light with auto-off, light follows motion, button toggles a light, light on
+  when a door opens, switch off at a time, leak closes the valve), pick the devices from lists
+  limited to those that can do it (read from what each device exposes), set the minutes or
+  time, read the rule as one sentence, press *Test the action now* to see the light react, and
+  save. Recipes reference devices by address, so a rename does not break them; the list shows
+  names in their place and flags a rule whose device the hub no longer has. The motion recipe
+  uses the engine's timers and picks a free one. Pure logic is unit-tested (`npm test`).
+
+- **"Add a device" replaces the permit-join box** on the Devices page. One button opens
+  pairing for two minutes and shows a panel with the reset instructions, a countdown, and
+  every device that appears while it is open, each with what the hub knows so far and one next
+  step: *reading what it is…*, *ready — open it to name it*, *no definition for what it reports
+  (ask for it with these two values)*, or, after a minute without answers, *press its button
+  or move it closer and Retry*. Two minutes with nothing joined gives the reset-until-it-blinks
+  step. A hub whose radio is down says so in the panel instead of listening in vain. Permit
+  join with a chosen number of seconds stays under *Advanced*.
+
+- **OTA page offers published versions.** The browser reads the project's GitHub releases,
+  keeps the `-ota.bin` files that fit this hub (chip, and the P4's silicon family from the
+  `rev1x` / `rev3x` name token), marks the installed one, and installs a chosen version with
+  one confirmation. A hub whose network cannot reach GitHub gets a plain explanation, and the
+  URL field lives on under *Advanced* for images that are not releases. Pure matching
+  functions are unit-tested (`npm test`).
+
+- **Set-up card knows when the hub stops accepting a password.** While open it shows the
+  minutes left; once the hub's ten-minute first-claim window has passed it shows what to do
+  (power-cycle, wait, try again) instead of a form that fails with "Setup failed (403)".
+
+- **OTA page: trial and rollback notes** (wired build). While a new firmware is on trial the
+  page says what the hub is checking and how long it can take; after a rollback it shows the
+  hub's reason (`ota_rollback_reason`) instead of leaving the owner to guess why the version
+  did not change.
+
+### Added
+
+- **A Time card in Settings**: whether the clock is set, the time server the hub asks, and,
+  while the clock is unset, a button that hands over this device's time.
+- **An offline hub gets the time from the browser.** When a hub reports `clock_set: false`,
+  the web UI sends it the browser's clock (`time.set`, at most once a minute), so its schedules
+  can run without internet access. If the hub cannot take it, the Rules page explains that
+  `Time#Cron` rules and Lua cron handlers wait, with a "Use this device's time" button. The
+  demo hub starts with an unset clock under `DEMO_CLOCK_UNSET=1`.
+- **The UI adapts to the board it runs on.** On the wired Ethernet build, Settings shows an
+  Ethernet card instead of Wi-Fi, and hides the cloud-uplink selector and the access-point
+  toggle; Info shows one card for the one chip; the OTA page offers a single update field,
+  or says plainly when the build cannot update itself yet. The dual-chip layout is unchanged.
+- **Backup and restore** (Settings → Backup): device names, rules, Lua scripts and collections
+  to one JSON file and back. Restore merges by name and never deletes; devices not paired on
+  the hub are listed as skipped. It runs over the ordinary API, so it works on every ZHAC
+  firmware. The Zigbee network (keys, PAN id) is not included — devices re-pair on a new
+  radio, then a restore brings their names and automations back.
+- **Templates in the Rules and Scripts editors** — seven single-rule starting points (motion
+  light, door lamp, button toggle, nightly off, leak valve, over-temperature alert) and four
+  Lua scripts (motion light with timeout, heating schedule, debounced leak alarm, power
+  watchdog), from the automation cookbook. Every rule template passes the firmware's DSL
+  parser.
+- **Home Assistant discovery switch** in Settings → MQTT, with the discovery prefix. Shown
+  only when the firmware supports it.
+- **Radio-down warning.** When the hub reports its Zigbee radio is not running, the Devices
+  page says so before anyone waits on permit join, and — when the radio crashed at start on
+  an ESP32-P4 board — points to flashing the C6 radio firmware.
+- **Web UI version on the Info page**, so bug reports say which UI build they came from.
+- **First-run help.** An empty Devices page now walks through pairing a first device
+  instead of one line of text, and the Info page has a Help card linking the getting-started
+  guide, docs, supported devices, device requests, bug reports and the latest release.
+- **Demo hub for UI work without hardware** — `npm run demo` serves the built UI with six
+  realistic devices on :8080, and `npm run dev` proxies to it. `DEMO_KIND=dual` imitates the
+  dual-chip build.
+
+### Fixed
+
+- **The in-app rule help showed button triggers the parser rejects.** Text values must be
+  quoted — `#action="single"`, not `#action=single` (an unquoted word is read as a number).
+- **The rule help's limits were wrong.** They now match the parser: device name 29, attribute
+  key 27, event name and MQTT topic 63, and timer indices 1–8 (it said 0–7).
+
 ### Changed
 
+- **Docs match the code again**: README lists the real pages and development flow, adds
+  screenshots, and fixes links; CONTRIBUTING no longer claims a Vitest suite (there is none)
+  or 2-space/single-quote style; ONBOARDING describes the three firmwares that serve the UI.
 - **Visual identity remapped onto the Soft Utility design system.** The palette,
   type scale, radii, elevation tiers and focus ring now derive from shared design
   tokens instead of literals scattered through the stylesheet: 25 tokens

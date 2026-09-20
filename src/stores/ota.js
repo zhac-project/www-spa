@@ -33,12 +33,19 @@ export async function triggerOtaP4(url) {
     return call("ota.p4", { url });
 }
 
+// Single-chip builds (wired) update the one chip that runs everything.
+// Progress events carry target "self".
+export async function triggerOtaSelf(url) {
+    return call("ota.update", { url });
+}
+
 // Progress state per target. Each entry: {state, offset, total, pct, err}.
 // state ∈ "idle" | "running" | "ok" | "err".
 const blank = (target) => ({ target, state: "idle", offset: 0, total: 0, pct: 0, err: "" });
 export const otaProgress = signal({
     s3: blank("s3"),
     p4: blank("p4"),
+    self: blank("self"),
 });
 
 function update(target, patch) {

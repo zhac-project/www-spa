@@ -1,34 +1,49 @@
 # www-spa
 
-Web UI for [ZHAC] — a Preact 10 + Vite 5 single-page app that talks
-to the S3 firmware over a single WebSocket (`/ws`). Built artefact
-is bundled into the S3 firmware's SPIFFS partition.
+The web UI of [ZHAC], served by the hub itself. Preact 10 + Vite 8, one WebSocket
+(`/ws`) plus a handful of REST calls. The same bundle runs on every ZHAC firmware — the
+dual-chip ESP32-S3, the single-chip ESP32-S3 and the wired ESP32-P4/S31 boards — and
+hides what a given build cannot do.
 
 [ZHAC]: https://github.com/zhac-project/zhac-platform
 
-## Features
+| Devices | Device detail | Lua editor |
+|---|---|---|
+| ![Device list](docs/screenshots/devices.png) | ![Device detail](docs/screenshots/device.png) | ![Lua script editor](docs/screenshots/scripts.png) |
 
-- 9 pages: Devices, Device detail, Groups, Scripts, Rules,
-  Settings, Logs, Metrics, Alerts.
-- Shared WS client with request/reply + push-event handling.
-- Built-in Lua editor (CodeMirror 6, lazy-loaded).
-- Signals-based state (`@preact/signals`) — no Redux, no Context mess.
-- Single-chunk editor bundle (manual `rollupOptions.manualChunks`)
-  so embedded httpd's socket pool doesn't get exhausted on first
-  editor open.
+*Screenshots are taken against the demo hub (`npm run demo`), not real hardware.*
+
+## Pages
+
+- **Devices** — the paired devices, "Add a device" (guided pairing; permit join with a chosen time under Advanced), rename / re-interview / remove.
+- **Device detail** — Info, States (live values, writable ones as controls), Commands,
+  Bind, Groups (native Zigbee groups) and Options tabs.
+- **Collections** — gateway-side groups: one command fans out to several devices.
+- **Groups** — native Zigbee groups across all devices.
+- **Rules** — `ON … DO … ENDON` automations: a Recipe tab (pick the sensor, the light, the time; preview; test the action) and the DSL editor with inline help.
+- **Scripts** — Lua scripts in a CodeMirror editor with ZHAC-aware autocomplete.
+- **Log**, **Diag** — the hub's log ring and frames no definition handled.
+- **Info**, **OTA**, **Settings** — system status, firmware update, network / MQTT /
+  Zigbee / access settings.
+- **Sign-in** — shown when the hub has authentication on; on first boot it asks you to
+  choose the admin password.
+
+Light, dark and system themes; the layout works down to phone width.
 
 ## Development
+
+No hardware needed — the demo hub answers the same commands as a wired hub, with six
+realistic devices:
 
 ```bash
 git clone https://github.com/zhac-project/www-spa.git
 cd www-spa
 npm ci
-npm run dev          # Vite dev server on localhost:5173,
-                     # proxies /ws → ws://localhost:8080
+npm run demo         # terminal 1: fake hub on localhost:8080
+npm run dev          # terminal 2: Vite on localhost:5173, /ws + /api proxied to :8080
 ```
 
-You need the S3 firmware running (or a WS stub) on `localhost:8080`
-for the UI to have something to talk to.
+Against a real hub instead, change the proxy target in `vite.config.js` to its address.
 
 ## Build for flashing
 
@@ -36,14 +51,16 @@ for the UI to have something to talk to.
 npm run build        # output in dist/
 ```
 
-The S3 firmware's SPIFFS partition is generated from `dist/`.
+The firmware packs `dist/` into a SPIFFS partition. `zhac-net-core` packs its own
+submodule copy; `zhac-wired-core` packs this checkout. `idf.py build` never runs `npm`,
+so build here first.
 
 ## Tree
 
 ```
 www-spa/
 ├── src/
-│   ├── pages/           (9 pages, 1 file per page)
+│   ├── pages/           (12 pages, 1 file per page)
 │   ├── components/      (shared UI primitives)
 │   ├── editor/          (CodeMirror theme, autocomplete, linter)
 │   ├── stores/          (@preact/signals state containers)
@@ -52,7 +69,9 @@ www-spa/
 │   └── styles.css
 ├── public/
 ├── tools/
-│   └── gen-zhac-completions.js  (parses docs/LUA_API.md → completions)
+│   ├── gen-zhac-completions.js  (parses LUA_API.md → completions)
+│   ├── check-tokens.mjs         (design-token guard, runs before every build)
+│   └── demo-server.mjs          (fake hub for development and screenshots)
 ├── package.json
 ├── vite.config.js
 └── index.html
@@ -60,8 +79,10 @@ www-spa/
 
 ## Protocol
 
-WebSocket only — no REST (one exception: `POST /api/scripts/:name`
-for Lua-script upload, which exceeds the httpd WS frame cap).
+WebSocket for everything except the auth probe (`GET /api/status`,
+`GET /api/devices`), sign-in and first-boot password (`/api/auth/*`) and
+Lua-script upload (`POST /api/scripts/:name`, which exceeds the httpd WS
+frame cap).
 Request/reply envelope:
 ```
 client → { id, cmd, args }
@@ -72,7 +93,7 @@ server → { id, ok: false, err: { code, msg } }   (error)
 Push events (no `id`): `device.added`, `device.updated`,
 `device.removed`, `attr.bulk`, `alert.*`.
 
-See [`WS_API.md`](https://github.com/zhac-project/zhac-docs/blob/main/WS_API.md)
+See [`WS_API.md`](https://github.com/zhac-project/zhac-docs/blob/master/WS_API.md)
 in the zhac-docs repo for the full command list.
 
 ## Routing
@@ -98,9 +119,9 @@ fresh checkouts without a sibling `zhac-docs/` clone still build.
 
 The SPA does NOT ship a `<meta http-equiv="Content-Security-Policy">`
 because a meta-tag CSP cannot cover WebSocket (`connect-src` for the
-`ws://` / `wss://` data path) on Chromium. CSP MUST be emitted by the S3
-httpd as a response header on `/` and `/assets/*`. Recommended minimum
-(applied in the S3 firmware's `esp_http_server` config):
+`ws://` / `wss://` data path) on Chromium. CSP MUST be emitted by the
+firmware's httpd as a response header on `/` and `/assets/*`. Recommended
+minimum:
 
 ```
 Content-Security-Policy:
@@ -118,11 +139,8 @@ and cannot currently be tightened without forking CM. Everything user-
 authored (rule names, Lua source, log messages) is rendered via JSX text
 nodes — there is no `dangerouslySetInnerHTML` anywhere in `src/`.
 
-## Open-source readiness (deferred)
+## Not yet
 
-- Dark theme (`prefers-color-scheme: dark`). The `:root` palette is
-  light-only today; deferred because it requires re-vetting every
-  Badge / Card / log-viewer colour pair against WCAG AA.
 - i18n. All strings are hardcoded English. Deferred — wire-up requires
   picking an i18n approach and adding extraction tooling.
 

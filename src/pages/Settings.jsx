@@ -4,16 +4,29 @@
 // OTA inputs, danger-zone reset. Every action maps to a WS command.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
-import { status } from "../stores/status.js";
+import { status, hubKind, lendBrowserClock } from "../stores/status.js";
 import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
 import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
 import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
+import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
 
 export function SettingsPage() {
     const d = status.value || {};
+    const kind = hubKind(d);
+    const chipWord = kind === "dual" ? "P4" : "hub";
+
+    // Time ----------------------------------------------------------------
+    const [ntp, setNtp] = useState("");
+    useEffect(() => { if (d.ntp_server != null && !ntp) setNtp(d.ntp_server); }, [d.ntp_server]);
+
+    async function useThisClock() {
+        const ok = await lendBrowserClock();
+        showToast(ok ? "Hub clock set from this device" : "The hub did not take the time",
+                  ok ? "ok" : "err");
+    }
 
     // WiFi ----------------------------------------------------------------
     const [wifi, setWifi] = useState(null);
@@ -25,7 +38,7 @@ export function SettingsPage() {
     async function loadWifi() {
         try { setWifi(await call("wifi.status")); } catch (_) {}
     }
-    useEffect(() => { loadWifi(); }, []);
+    useEffect(() => { if (kind && kind !== "wired") loadWifi(); }, [kind]);
 
     async function doScan() {
         setScanning(true);
@@ -59,7 +72,7 @@ export function SettingsPage() {
         } catch (e) { showToast("Failed: " + e.message, "err"); }
     }
     async function doZigbeeReset() {
-        if (!confirm("WARNING: erase ALL paired devices, rules, and scripts from P4?")) return;
+        if (!confirm(`WARNING: erase ALL paired devices, rules, and scripts from the ${chipWord}?`)) return;
         try { await call("zigbee.reset"); showToast("Reset — rebooting", "ok"); }
         catch (e) { showToast("Failed: " + e.message, "err"); }
     }
@@ -67,10 +80,14 @@ export function SettingsPage() {
     // Settings toggles / MQTT fields --------------------------------------
     const [brokerUrl, setBrokerUrl] = useState(d.mqtt_broker || "");
     const [mqttRoot,  setMqttRoot]  = useState(d.mqtt_root_topic || "");
+    const [haPrefix,  setHaPrefix]  = useState(d.ha_prefix || "");
     useEffect(() => {
         if (d.mqtt_broker != null && !brokerUrl)  setBrokerUrl(d.mqtt_broker);
         if (d.mqtt_root_topic != null && !mqttRoot) setMqttRoot(d.mqtt_root_topic);
-    }, [d.mqtt_broker, d.mqtt_root_topic]);
+        if (d.ha_prefix != null && !haPrefix) setHaPrefix(d.ha_prefix);
+    }, [d.mqtt_broker, d.mqtt_root_topic, d.ha_prefix]);
+    // Firmwares without the Home Assistant bridge do not report the field.
+    const haSupported = d.ha_discovery !== undefined;
 
     async function writeSettings(patch, successMsg) {
         try { await call("settings.set", patch); showToast(successMsg || "Saved", "ok"); }
@@ -108,7 +125,7 @@ export function SettingsPage() {
                     </div>
                 </Card>
 
-                <Card title="WiFi">
+                {kind === "wired" ? <EthernetCard /> : <Card title="WiFi">
                     <div style="margin-bottom:12px">
                         {wifi == null ? "…" : (
                             wifi.mode === "ap"
@@ -142,7 +159,7 @@ export function SettingsPage() {
                     <button type="button" class="danger small" onClick={doForget}>
                         Forget WiFi &amp; Switch to AP Mode
                     </button>
-                </Card>
+                </Card>}
 
                 <Card title="MQTT">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -158,13 +175,63 @@ export function SettingsPage() {
                                             onInput={(e) => setBrokerUrl(e.currentTarget.value)} /></label>
                     <label>Root topic<input type="text" value={mqttRoot}
                                             onInput={(e) => setMqttRoot(e.currentTarget.value)} /></label>
+                    {haSupported && (
+                        <>
+                            <div style="display:flex;align-items:center;gap:10px;margin:10px 0 6px">
+                                <label class="toggle">
+                                    <input type="checkbox" checked={!!d.ha_discovery}
+                                           onChange={(e) => writeSettings({ ha_discovery: e.currentTarget.checked },
+                                               e.currentTarget.checked ? "Home Assistant discovery on" : "Home Assistant discovery off")} />
+                                    <span class="toggle-slider" />
+                                </label>
+                                <span>Home Assistant discovery</span>
+                            </div>
+                            <label>Discovery prefix<input type="text" value={haPrefix} placeholder="homeassistant"
+                                                          onInput={(e) => setHaPrefix(e.currentTarget.value)} /></label>
+                            <p class="field-hint">
+                                Devices appear in Home Assistant's MQTT integration on their own. Turning this
+                                off removes them again.
+                            </p>
+                        </>
+                    )}
                     <button class="primary small"
-                            onClick={() => writeSettings({ broker_url: brokerUrl, mqtt_root_topic: mqttRoot }, "MQTT saved")}>
+                            onClick={() => writeSettings(haSupported
+                                ? { broker_url: brokerUrl, mqtt_root_topic: mqttRoot, ha_prefix: haPrefix || "homeassistant" }
+                                : { broker_url: brokerUrl, mqtt_root_topic: mqttRoot }, "MQTT saved")}>
                         Save
                     </button>
                 </Card>
 
-                <UplinkCard />
+                {d.ntp_server !== undefined && (
+                    <Card title="Time">
+                        <table class="kv-table"><tbody>
+                            <tr><th>Clock</th><td>{d.clock_set === false ? "not set yet" : "set"}</td></tr>
+                        </tbody></table>
+                        {d.ntp_dhcp_server && (
+                            <p class="field-hint">Your router offers a time server ({d.ntp_dhcp_server}); the hub
+                                asks it first and the one below only if it does not answer. Naming a
+                                server below switches the router's offer off.</p>
+                        )}
+                        <label>Time server<input type="text" value={ntp} placeholder="pool.ntp.org"
+                                                  maxLength={63}
+                                                  onInput={(e) => setNtp(e.currentTarget.value)} /></label>
+                        <div class="btn-strip" style="margin-top:8px">
+                            <button class="primary small"
+                                    onClick={() => writeSettings({ ntp_server: ntp.trim() }, "Time server saved")}>
+                                Save
+                            </button>
+                            {d.clock_set === false &&
+                                <button class="small" onClick={useThisClock}>Use this device's time</button>}
+                        </div>
+                        <p class="field-hint">
+                            The boards have no battery-backed clock, and schedules wait until the time is
+                            set. On a network without internet access, name a time server on it, for
+                            example your router. Leave the field empty for the public default.
+                        </p>
+                    </Card>
+                )}
+
+                {kind === "dual" && <UplinkCard />}
 
                 <Card title="Zigbee network">
                     <label>Channel
@@ -184,9 +251,9 @@ export function SettingsPage() {
                     <p class="field-hint">Channel + key changes apply after factory reset.</p>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
                     <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
-                        Erase all paired devices, rules, and scripts from P4. The coordinator will reboot.
+                        Erase all paired devices, rules, and scripts from the {chipWord}. The coordinator will reboot.
                     </p>
-                    <button class="danger small" onClick={doZigbeeReset}>Factory reset P4</button>
+                    <button class="danger small" onClick={doZigbeeReset}>Factory reset {chipWord === "P4" ? "P4" : "Zigbee"}</button>
                 </Card>
 
                 <Card title="Misc">
@@ -196,9 +263,11 @@ export function SettingsPage() {
                     <ToggleRow label="Auth (bearer token)"
                                checked={!!d.auth_enabled}
                                onChange={(v) => writeSettings({ auth_enabled: v })} />
-                    <ToggleRow label="Disable AP when STA connected"
-                               checked={!!d.ap_disabled}
-                               onChange={(v) => writeSettings({ ap_disabled: v })} />
+                    {kind !== "wired" && (
+                        <ToggleRow label="Disable AP when STA connected"
+                                   checked={!!d.ap_disabled}
+                                   onChange={(v) => writeSettings({ ap_disabled: v })} />
+                    )}
                     <ToggleRow label="Stream logs to MQTT"
                                checked={!!d.log_mqtt_enabled}
                                onChange={(v) => writeSettings({ log_mqtt_enabled: v })} />
@@ -210,11 +279,13 @@ export function SettingsPage() {
 
                 {d.auth_enabled && <ChangePasswordCard />}
 
+                <BackupCard status={d} />
+
                 <Card title="OTA">
                     <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
                         Firmware updates live on the dedicated OTA page, which
                         validates the URL, prompts before flashing, and shows
-                        progress for both chips.
+                        progress.
                     </p>
                     <button class="primary small"
                             onClick={() => navigate("ota")}>Open OTA page</button>
@@ -223,6 +294,101 @@ export function SettingsPage() {
                 {d.remote_available && <RemoteCard />}
             </div>
         </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Backup card — device names, rules, Lua scripts and collections to one JSON
+// file, and back. Logic in stores/backup.js.
+// ---------------------------------------------------------------------------
+function BackupCard({ status }) {
+    const [busy, setBusy] = useState(false);
+    const [result, setResult] = useState(null);
+    const fileRef = useRef(null);
+
+    async function doBackup() {
+        setBusy(true);
+        try {
+            const b = await createBackup(status);
+            const day = b.created.slice(0, 10);
+            downloadJson(b, `zhac-backup-${status.hostname || "hub"}-${day}.json`);
+            showToast(`Backup saved: ${b.devices.length} devices, ${b.rules.length} rules, ${b.scripts.length} scripts`, "ok");
+        } catch (e) { showToast("Backup failed: " + e.message, "err"); }
+        finally { setBusy(false); }
+    }
+
+    async function doRestore(e) {
+        const file = e.currentTarget.files && e.currentTarget.files[0];
+        e.currentTarget.value = "";
+        if (!file) return;
+        let b;
+        try { b = JSON.parse(await file.text()); }
+        catch (_) { showToast("That file is not valid JSON", "err"); return; }
+        // Preview before anything changes: what the file holds, what would
+        // be skipped here, and what a backup never contains.
+        let lines;
+        try {
+            const paired = await call("device.list").then((d) => (Array.isArray(d) ? d : (d?.devices || [])).map((x) => x.ieee)).catch(() => []);
+            lines = describeBackup(b, paired);
+        } catch (err) { showToast(err.message, "err"); return; }
+        if (!confirm(`Restore "${file.name}" into this hub?\n\n${lines.join("\n\n")}`)) return;
+        setBusy(true);
+        try { setResult(await restoreBackup(b)); showToast("Restore finished", "ok"); }
+        catch (err) { showToast("Restore failed: " + err.message, "err"); }
+        finally { setBusy(false); }
+    }
+
+    return (
+        <Card title="Backup">
+            <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
+                Device names, rules, Lua scripts and collections, as one file. {NOT_IN_BACKUP}{" "}
+                After moving to a new board, pair the devices again, then restore: names and
+                automations come back.
+            </p>
+            <div class="btn-strip">
+                <button class="primary small" disabled={busy} onClick={doBackup}>Download backup</button>
+                <button class="small" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>
+                    Restore from file…
+                </button>
+                <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={doRestore} />
+            </div>
+            {result && (
+                <p class="field-hint" style="margin-top:8px">
+                    Restored {result.names} names, {result.rules} rules, {result.scripts} scripts,{" "}
+                    {result.collections} collections.
+                    {result.skipped.length > 0 && <> Skipped: {result.skipped.join("; ")}.</>}
+                </p>
+            )}
+        </Card>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Ethernet card — the wired build's replacement for the WiFi card. Read-only:
+// the link comes up by itself (DHCP), so there is nothing to configure.
+// ---------------------------------------------------------------------------
+function EthernetCard() {
+    const [net, setNet] = useState(null);
+    useEffect(() => {
+        call("net.status").then(setNet).catch(() => setNet({}));
+    }, []);
+    const n = net || {};
+    const rows = [
+        ["Link",     n.link_up ? `${n.speed_mbps || "?"} Mbit/s, ${n.duplex || "?"} duplex` : "down"],
+        ["Address",  n.ip || "—"],
+        ["Gateway",  n.gateway || "—"],
+        ["Hostname", n.hostname ? n.hostname + ".local" : "—"],
+        ["MAC",      n.mac || "—"],
+    ];
+    return (
+        <Card title="Ethernet">
+            {net == null ? "…" : (
+                <table class="kv-table"><tbody>
+                    {rows.map(([k, v]) => <tr key={k}><th>{k}</th><td>{v}</td></tr>)}
+                </tbody></table>
+            )}
+            <p class="field-hint">The address comes from your router (DHCP).</p>
+        </Card>
     );
 }
 

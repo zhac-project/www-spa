@@ -20,9 +20,15 @@ import { signal } from "@preact/signals";
 // "needsSetup"— auth on but the device has NO admin password yet → show the
 //               one-time "set admin password" card (first boot / pre-password
 //               firmware upgrade). Setting it logs this browser in.
+// "setupClosed" — auth on, no password, but the hub was powered on more than
+//               ten minutes ago: the setup endpoint refuses until someone
+//               power-cycles it (bounded first claim). Card explains that.
 // "offline"   — /api/status unreachable (device down / booting) → retry pane
 export const authState = signal("checking");
 export const authError = signal("");
+// Seconds the first-claim window has left, from /api/status; the setup card
+// shows a countdown so the owner knows why it may close on them.
+export const setupSecsLeft = signal(0);
 
 function storedToken() {
     try { return localStorage.getItem("zhac_token") || ""; } catch (_) { return ""; }
@@ -67,8 +73,11 @@ export async function probeAuth() {
     }
     // No admin password on the device yet (fresh unit, or upgraded from
     // token-only firmware) → force the one-time setup card before login.
-    authState.value = status.auth_setup_required === true ? "needsSetup"
-                                                          : "needsAuth";
+    if (status.auth_setup_required !== true) { authState.value = "needsAuth"; return; }
+    // Older firmware has no window: treat a missing field as open.
+    const left = typeof status.auth_setup_secs_left === "number" ? status.auth_setup_secs_left : -1;
+    setupSecsLeft.value = left;
+    authState.value = left === 0 ? "setupClosed" : "needsSetup";
 }
 
 // Password login: exchange the password for the API token via
@@ -132,8 +141,14 @@ export async function submitSetup(password, confirm) {
         authError.value = "Device unreachable — try again.";
         return false;
     }
-    if (r.status === 403) {           // someone else just claimed it — log in
-        authState.value = "needsAuth";
+    if (r.status === 403) {
+        const why = await r.json().then(d => d && d.error).catch(() => "");
+        if (why === "setup_closed") {   // the ten-minute window ran out
+            setupSecsLeft.value = 0;
+            authState.value = "setupClosed";
+            return false;
+        }
+        authState.value = "needsAuth";  // someone else just claimed it — log in
         authError.value = "A password was already set — sign in with it.";
         return false;
     }

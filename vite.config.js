@@ -2,11 +2,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+// Shown on the Info page so a bug report says which UI build it came from:
+// `git describe` in a checkout, the package.json version otherwise.
+function uiVersion() {
+    try {
+        return execSync("git describe --tags --always --dirty",
+                        { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch {
+        return JSON.parse(readFileSync(new URL("./package.json", import.meta.url))).version;
+    }
+}
 
 // Dev server expects the firmware (or a stub) running on localhost:8080.
 // Build output is single-chunk so SPIFFS serves it with minimal round-trips.
 export default defineConfig({
     plugins: [preact()],
+    define: { __UI_VERSION__: JSON.stringify(uiVersion()) },
     build: {
         outDir: "dist",
         emptyOutDir: true,

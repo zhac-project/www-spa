@@ -93,6 +93,9 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Sign-in card explains a storage fault** (`auth_storage_error`): sign in with the serial
+  token, then reset storage; the hub no longer opens itself in that state.
+
 - **The in-app rule help showed button triggers the parser rejects.** Text values must be
   quoted — `#action="single"`, not `#action=single` (an unquoted word is read as a number).
 - **The rule help's limits were wrong.** They now match the parser: device name 29, attribute

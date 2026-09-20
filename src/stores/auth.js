@@ -73,6 +73,14 @@ export async function probeAuth() {
     }
     // No admin password on the device yet (fresh unit, or upgraded from
     // token-only firmware) → force the one-time setup card before login.
+    if (status.auth_storage_error === true) {
+        // The hub could not open its sign-in storage and locked itself with a
+        // token that only the serial console shows (auth.cpp, fail closed).
+        authError.value = "The hub's sign-in storage is not readable. Sign in with the token printed on " +
+                          "its serial console (Use API token), then reset storage from Settings.";
+        authState.value = "needsAuth";
+        return;
+    }
     if (status.auth_setup_required !== true) { authState.value = "needsAuth"; return; }
     // Older firmware has no window: treat a missing field as open.
     const left = typeof status.auth_setup_secs_left === "number" ? status.auth_setup_secs_left : -1;

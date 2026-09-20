@@ -16,6 +16,7 @@
 //   DEMO_OTA_ROLLBACK=1 npm run demo   # the last update was undone; status says why
 //   DEMO_AUTH=setup npm run demo       # fresh hub: sign-in on, no password, set-up window open
 //   DEMO_AUTH=closed npm run demo      # ... powered on > 10 min ago: set-up refused until a power cycle
+//   DEMO_AUTH=storage npm run demo     # sign-in storage unreadable: locked, serial token only
 //   DEMO_JOIN=unsupported npm run demo # "Add a device": the joining device has no definition
 //   DEMO_JOIN=none npm run demo        # "Add a device": nothing joins (the two-minute timeout path)
 //
@@ -310,7 +311,8 @@ const server = createServer(async (req, res) => {
     const authMode = process.env.DEMO_AUTH;   // undefined | "setup" | "closed"
     const setupLeft = authMode === "setup" ? Math.max(0, 600 - (now() - STARTED)) : 0;
     if (url.pathname === "/api/status") return json(200, { ...status(), wifi_mode: "eth",
-        auth_enabled: !!authMode, auth_setup_required: !!authMode, auth_setup_secs_left: setupLeft });
+        auth_enabled: !!authMode, auth_setup_required: authMode === "setup" || authMode === "closed", auth_setup_secs_left: setupLeft,
+        ...(authMode === "storage" ? { auth_storage_error: true } : {}) });
     if (url.pathname === "/api/auth/setup" && req.method === "POST") {
         if (!authMode) return json(403, { error: "already_set" });
         if (setupLeft === 0) return json(403, { error: "setup_closed" });

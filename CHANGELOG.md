@@ -10,6 +10,9 @@ across the ZHAC platform.
 
 ### Added
 
+- **Diag page: Tasks card** (wired and single-chip hubs): CPU share per task over the last 5 s,
+  core, priority, stack headroom; polled while the page is open.
+
 - **Storage error card** on Settings (`storage_error`): explains that nothing was erased, what an
   erase costs, and offers "Erase storage and restart" behind a confirmation.
 

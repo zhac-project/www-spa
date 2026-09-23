@@ -8,6 +8,10 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Weekly schedule: a day with fewer than four periods could not be saved.** The thermostat stores a short day padded with repeats of its last period, and the editor showed those repeats as entered rows, so saving any day (or copying Monday to the weekdays) failed with "start times must go up through the day" unless every row got a distinct time. Repeats of the last period now show as empty rows.
+
 ### Added
 
 - **Weekly schedule editor** on the device page, for thermostats that expose writable `schedule_<day>` strings (Saswell SEA801/SEA802 first): a Monday-to-Sunday grid of four periods (start time + °C), "Copy Monday to Tue–Fri", undo, and one Save that sends only the changed days. Days sent but not yet reported back by the (sleepy) valve show "waiting for device". Parsing, formatting and the pre-send check live in `src/schedule.js` with tests; the firmware still checks every write. The demo hub gains a Saswell valve to preview it (`npm run demo`).

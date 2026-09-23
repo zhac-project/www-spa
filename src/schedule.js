@@ -37,6 +37,11 @@ export function parseDay(s) {
         rows.push({ time: `${m[1].padStart(2, "0")}:${m[2]}`, temp: Number(m[3]) });
     }
     if (rows.length > PERIODS) return null;
+    // A thermostat stores a short day padded with repeats of its last period
+    // (and hubs before v2026092209 reported them as such): show them as the
+    // empty rows they stand for, so the day saves as it was entered.
+    const same = (a, b) => a.time === b.time && a.temp === b.temp;
+    while (rows.length > 1 && same(rows[rows.length - 1], rows[rows.length - 2])) rows.pop();
     while (rows.length < PERIODS) rows.push(blank());
     return rows;
 }

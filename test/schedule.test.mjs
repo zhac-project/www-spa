@@ -50,3 +50,17 @@ test("validation catches what the thermostat would refuse", () => {
     assert.match(validateDay([{ time: "", temp: 20 }]), /start time/);
     assert.match(validateDay([{ time: "06:00", temp: "" }]), /temperature/);
 });
+
+test("a day the thermostat stored padded shows its real periods and saves", () => {
+    // The valve fills a short day with repeats of its last period.
+    const two = parseDay("11:00/22.0 19:00/16.0 19:00/16.0 19:00/16.0");
+    assert.deepEqual(two.slice(0, 2), [{ time: "11:00", temp: 22 }, { time: "19:00", temp: 16 }]);
+    assert.deepEqual(two[2], { time: "", temp: "" });
+    assert.equal(validateDay(two), null);
+    assert.equal(formatDay(two), "11:00/22.0 19:00/16.0");
+
+    const one = parseDay("11:00/22.0 11:00/22.0 11:00/22.0 11:00/22.0");
+    assert.equal(one.filter(r => r.time).length, 1);
+    assert.equal(validateDay(one), null);
+    assert.equal(formatDay(one), "11:00/22.0");
+});

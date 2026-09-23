@@ -69,6 +69,18 @@ const DEVICES = [
                 num("local_temperature", "°C"), { name: "system_mode", type: "enum", access: 3, values: ["auto", "heat", "off"] },
                 { name: "child_lock", type: "binary", access: 3, category: "config" }, diag("battery", "%")],
       attrs: { current_heating_setpoint: 21, local_temperature: 19.5, system_mode: "heat", child_lock: 0, battery: 72 } },
+    // Weekly program: the device page shows the schedule editor for writable schedule_<day> strings.
+    { ieee: "0xEC1BBDFFFE2DAD79", nwk: 0x12EC, name: "study_radiator", vendor: "Saswell", model: "SEA801-Zigbee/SEA802-Zigbee",
+      manufacturer: "_TYST11_KGbxAXL2", model_id: "GbxAXL2", power_source: "Battery", lqi: 120, battery: 0, seen: 90,
+      exposes: [{ name: "current_heating_setpoint", type: "numeric", access: 3, unit: "°C" }, num("local_temperature", "°C"),
+                { name: "schedule_enable", type: "binary", access: 3 },
+                ...["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                    .map((day) => ({ name: `schedule_${day}`, type: "text", access: 3 }))],
+      attrs: { current_heating_setpoint: 21, local_temperature: 20.4, schedule_enable: 1,
+               ...Object.fromEntries(["monday", "tuesday", "wednesday", "thursday", "friday"]
+                   .map((day) => [`schedule_${day}`, "06:00/21.0 08:00/17.0 17:00/21.0 22:00/17.0"])),
+               schedule_saturday: "08:00/21.0 12:00/20.0 17:00/21.0 23:00/17.0",
+               schedule_sunday: "08:00/21.0 12:00/20.0 17:00/21.0 22:00/17.0" } },
 ];
 const RULES = [
     { id: 1, enabled: true, trigger_type: 0, rule_type: 0, name: "Hallway light on motion",

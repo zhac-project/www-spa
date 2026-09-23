@@ -10,6 +10,7 @@ across the ZHAC platform.
 
 ### Added
 
+- **Weekly schedule editor** on the device page, for thermostats that expose writable `schedule_<day>` strings (Saswell SEA801/SEA802 first): a Monday-to-Sunday grid of four periods (start time + °C), "Copy Monday to Tue–Fri", undo, and one Save that sends only the changed days. Days sent but not yet reported back by the (sleepy) valve show "waiting for device". Parsing, formatting and the pre-send check live in `src/schedule.js` with tests; the firmware still checks every write. The demo hub gains a Saswell valve to preview it (`npm run demo`).
 - **Diag page: Tasks card** (wired and single-chip hubs): CPU share per task over the last 5 s,
   core, priority, stack headroom; polled while the page is open.
 

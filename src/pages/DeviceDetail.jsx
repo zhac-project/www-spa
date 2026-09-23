@@ -14,6 +14,8 @@ import { uplinkGet, deviceRainmakerList, deviceRainmakerAdd, deviceRainmakerRemo
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
 import { call } from "../ws/client.js";
+import { SCHEDULE_DAYS, WEEKDAYS, TEMP_MIN, TEMP_MAX, TEMP_STEP,
+         parseDay, formatDay, validateDay } from "../schedule.js";
 
 const TABS = [
     { id: "info",     label: "Info"     },
@@ -261,27 +263,157 @@ function EditableLabel({ value, onSave, placeholder = "—" }) {
 
 function StatesTab({ d, ieee }) {
     const attrs = d.attrs || {};
-    const keys = Object.keys(attrs).sort();
     // Index exposes by attribute name so each row can look up its
     // type / access bits / enum values. Server-provided, canonical.
     const exposeMap = {};
     for (const e of (d.exposes || [])) {
         if (e && e.name) exposeMap[e.name] = e;
     }
-    if (!keys.length) {
+    // Writable per-day schedule strings get the schedule editor instead of
+    // seven raw text rows -- shown even before the thermostat has reported
+    // them, so a schedule can be set on a valve that has not been queried yet.
+    const scheduleDays = SCHEDULE_DAYS.map(s => s.key).filter(k => isWritable(exposeMap[k]));
+    const keys = Object.keys(attrs).filter(k => !scheduleDays.includes(k)).sort();
+    if (!keys.length && !scheduleDays.length) {
         return <div class="tab-panel"><p class="empty-text">No attributes reported yet.</p></div>;
     }
     return (
         <div class="tab-panel">
-            <table class="data-table dev-states">
-                <thead><tr><th>Attribute</th><th>Value</th><th></th></tr></thead>
-                <tbody>
-                    {keys.map(k => (
-                        <AttrRow key={k} ieee={ieee} k={k} v={attrs[k]}
-                                 expose={exposeMap[k]} />
-                    ))}
-                </tbody>
-            </table>
+            {scheduleDays.length > 0 && <ScheduleCard ieee={ieee} attrs={attrs} days={scheduleDays} />}
+            {keys.length > 0 && (
+                <table class="data-table dev-states">
+                    <thead><tr><th>Attribute</th><th>Value</th><th></th></tr></thead>
+                    <tbody>
+                        {keys.map(k => (
+                            <AttrRow key={k} ieee={ieee} k={k} v={attrs[k]}
+                                     expose={exposeMap[k]} />
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+}
+
+const dayLabel = k => SCHEDULE_DAYS.find(s => s.key === k)?.label ?? k;
+const SCHED_INPUT = "padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius-control);";
+
+// Weekly program editor for thermostats that expose writable `schedule_<day>`
+// strings (Saswell SEA801/SEA802). Edits stay local until Save, and only the
+// changed days are sent, one device.attr.set each: a battery valve takes each
+// write on its next wake-up, so fewer writes land sooner. The firmware checks
+// every write again; validateDay() only spares a pointless round trip.
+function ScheduleCard({ ieee, attrs, days }) {
+    const reported = k => parseDay(attrs[k]) ?? parseDay("");
+    const [draft, setDraft] = useState(() => Object.fromEntries(days.map(k => [k, reported(k)])));
+    const [dirty, setDirty] = useState(() => new Set());
+    const [busy, setBusy] = useState(false);
+
+    // A fresh report from the thermostat replaces the days nobody is editing.
+    const reportKey = days.map(k => attrs[k] ?? "").join("|");
+    useEffect(() => {
+        setDraft(prev => {
+            const next = { ...prev };
+            for (const k of days) if (!dirty.has(k)) next[k] = reported(k);
+            return next;
+        });
+    }, [reportKey]);
+
+    function markDirty(ks) {
+        setDirty(prev => { const s = new Set(prev); for (const k of ks) s.add(k); return s; });
+    }
+    function edit(k, i, field, value) {
+        const v = field === "temp" && value !== "" ? Number(value) : value;
+        setDraft(prev => ({ ...prev, [k]: prev[k].map((r, j) => (j === i ? { ...r, [field]: v } : r)) }));
+        markDirty([k]);
+    }
+    function copyMondayToWeekdays() {
+        const targets = WEEKDAYS.slice(1).filter(k => days.includes(k));
+        const src = draft[WEEKDAYS[0]] || reported(WEEKDAYS[0]);
+        setDraft(prev => {
+            const next = { ...prev };
+            for (const k of targets) next[k] = src.map(r => ({ ...r }));
+            return next;
+        });
+        markDirty(targets);
+    }
+    function undo() {
+        setDraft(Object.fromEntries(days.map(k => [k, reported(k)])));
+        setDirty(new Set());
+    }
+    async function save() {
+        const todo = days.filter(k => dirty.has(k));
+        for (const k of todo) {
+            const err = validateDay(draft[k]);
+            if (err) { showToast(`${dayLabel(k)}: ${err}`, "err"); return; }
+        }
+        setBusy(true);
+        const done = [];
+        try {
+            for (const k of todo) {
+                await setDeviceAttr(ieee, k, formatDay(draft[k]));
+                done.push(k);
+            }
+            showToast(`Sent ${todo.map(dayLabel).join(", ")}. The thermostat applies it when it next wakes.`, "ok");
+        } catch (e) {
+            showToast(`${dayLabel(todo[done.length])} not sent: ${e.message}`, "err");
+        } finally {
+            setDirty(prev => { const s = new Set(prev); for (const k of done) s.delete(k); return s; });
+            setBusy(false);
+        }
+    }
+    // Per-day state: edited here, or sent and not yet reported back.
+    function status(k) {
+        if (dirty.has(k)) return <span class="ro-tag">changed</span>;
+        if (formatDay(draft[k]) !== formatDay(reported(k))) return <span class="ro-tag">waiting for device</span>;
+        return null;
+    }
+
+    return (
+        <div style="margin-bottom:18px">
+            <h4 style="margin:0 0 4px">Weekly schedule</h4>
+            <p class="tab-hint">
+                From each start time the thermostat holds that temperature until the next one.
+                It runs this program while the schedule is on (system mode auto), on the hub's
+                clock &mdash; set the hub's timezone in Settings.
+            </p>
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Day</th><th>Period 1</th><th>Period 2</th><th>Period 3</th><th>Period 4</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {days.map(k => (
+                            <tr key={k}>
+                                <td>{dayLabel(k)}</td>
+                                {draft[k].map((r, i) => (
+                                    <td key={i} style="white-space:nowrap">
+                                        <input type="time" value={r.time} disabled={busy}
+                                               aria-label={`${dayLabel(k)} period ${i + 1} start`}
+                                               onInput={e => edit(k, i, "time", e.currentTarget.value)}
+                                               style={SCHED_INPUT} />
+                                        {" "}
+                                        <input type="number" value={r.temp} disabled={busy}
+                                               min={TEMP_MIN} max={TEMP_MAX} step={TEMP_STEP}
+                                               aria-label={`${dayLabel(k)} period ${i + 1} temperature`}
+                                               onInput={e => edit(k, i, "temp", e.currentTarget.value)}
+                                               style={SCHED_INPUT + "width:62px"} />
+                                        <span class="ro-unit"> °C</span>
+                                    </td>
+                                ))}
+                                <td>{status(k)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <div class="btn-strip" style="margin-top:8px">
+                <button class="small" onClick={copyMondayToWeekdays} disabled={busy}>Copy Monday to Tue–Fri</button>
+                <button class="small" onClick={undo} disabled={busy || !dirty.size}>Undo changes</button>
+                <button class="primary small" onClick={save} disabled={busy || !dirty.size}>
+                    {busy ? "Saving…" : dirty.size ? `Save ${dirty.size} day${dirty.size === 1 ? "" : "s"}` : "Save"}
+                </button>
+            </div>
         </div>
     );
 }

@@ -273,7 +273,13 @@ function StatesTab({ d, ieee }) {
     // seven raw text rows -- shown even before the thermostat has reported
     // them, so a schedule can be set on a valve that has not been queried yet.
     const scheduleDays = SCHEDULE_DAYS.map(s => s.key).filter(k => isWritable(exposeMap[k]));
-    const keys = Object.keys(attrs).filter(k => !scheduleDays.includes(k)).sort();
+    // Settings the device has not reported yet (a Tuya MCU often sends them
+    // only at power-up) still get a row, so they can be set: writable
+    // state+set exposes. Write-only ones live on the Commands tab.
+    const unreported = Object.values(exposeMap)
+        .filter(e => (e.access & ACCESS_SET) && (e.access & ACCESS_STATE) && !(e.name in attrs))
+        .map(e => e.name);
+    const keys = [...Object.keys(attrs), ...unreported].filter(k => !scheduleDays.includes(k)).sort();
     if (!keys.length && !scheduleDays.length) {
         return <div class="tab-panel"><p class="empty-text">No attributes reported yet.</p></div>;
     }

@@ -10,6 +10,7 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **A writable setting the device had not reported yet had no row anywhere**: the States tab listed only reported values and Commands only write-only ones, so e.g. a Neo alarm's melody (a Tuya MCU often reports settings only at power-up) could not be set. Writable state+set exposes without a value now get a row too.
 - **Weekly schedule: a day with fewer than four periods could not be saved.** The thermostat stores a short day padded with repeats of its last period, and the editor showed those repeats as entered rows, so saving any day (or copying Monday to the weekdays) failed with "start times must go up through the day" unless every row got a distinct time. Repeats of the last period now show as empty rows.
 
 ### Added

@@ -8,6 +8,7 @@
 // credentials (MQTT broker URL, passwords).
 import { call } from "../ws/client.js";
 import { writeScript } from "./scripts.js";
+import { renameDevice } from "./devices.js";
 export { describeBackup, NOT_IN_BACKUP } from "../backup_preview.js";
 
 import { BACKUP_FORMAT } from "../backup_preview.js";
@@ -59,7 +60,7 @@ export async function restoreBackup(b) {
     for (const d of b.devices || []) {
         if (!d.name) continue;
         if (!paired.has(lc(d.ieee))) { out.skipped.push(`${d.name}: not paired on this hub`); continue; }
-        try { await call("device.rename", { ieee: d.ieee, name: d.name }); out.names++; }
+        try { await renameDevice(d.ieee, d.name); out.names++; }
         catch (e) { out.skipped.push(`${d.name}: ${e.message}`); }
     }
 

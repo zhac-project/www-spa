@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { logs, paused, togglePause, clearLogs, levelFilter,
          setLevelFilter, bootstrapLogs } from "../stores/logs.js";
+import { copyText } from "../utils/clipboard.js";
+import { showToast } from "../stores/ui.js";
 
 const LEVELS = [
     { v: "",  label: "All" },
@@ -16,6 +18,13 @@ const LEVELS = [
     { v: "V", label: "Verbose" },
 ];
 
+// One line per entry, same fields the viewer shows plus a clock time --
+// useful once the text is out of the scrolling view and in a paste target.
+function fmtLogLine(l) {
+    const time = l.ts ? new Date(l.ts).toLocaleTimeString() : "—";
+    return `${time} [${l.level || "I"}] ${l.tag ? l.tag + ": " : ""}${l.msg}`;
+}
+
 export function LogsPage() {
     const viewerRef = useRef(null);
     const [autoscroll, setAutoscroll] = useState(true);
@@ -25,6 +34,11 @@ export function LogsPage() {
     const visible = filter
         ? logs.value.filter(l => l.level === filter)
         : logs.value;
+
+    async function doCopy() {
+        const ok = await copyText(visible.map(fmtLogLine).join("\n"));
+        showToast(ok ? "Copied" : "Copy failed", ok ? "ok" : "err");
+    }
 
     useEffect(() => {
         if (autoscroll && viewerRef.current) {
@@ -53,6 +67,7 @@ export function LogsPage() {
             <div class="toolbar">
                 <button onClick={clearLogs}>Clear</button>
                 <button onClick={togglePause}>{paused.value ? "Resume" : "Pause"}</button>
+                <button onClick={doCopy}>Copy</button>
                 <label class="check-label">
                     <input type="checkbox" checked={autoscroll}
                            onChange={(e) => setAutoscroll(e.currentTarget.checked)} />

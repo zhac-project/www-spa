@@ -8,6 +8,7 @@ import { devices, bootstrapDevices, deleteDevice } from "../stores/devices.js";
 import { call } from "../ws/client.js";
 import { navigate, showToast, hrefFor } from "../stores/ui.js";
 import { fmtSince, hex16 } from "../utils.js";
+import { deviceMatchesFilter } from "../utils/deviceFilter.js";
 import { LINKS } from "../links.js";
 import { status } from "../stores/status.js";
 
@@ -263,7 +264,10 @@ function PermitJoinAdvanced() {
 
 export function DevicesPage() {
     const [adding, setAdding] = useState(false);
+    const [filterText, setFilterText] = useState("");
     const list = devices.value;
+    const filterActive = filterText.trim().length > 0;
+    const filtered = filterActive ? list.filter((d) => deviceMatchesFilter(d, filterText)) : list;
 
     // Inlined table so the '#' column can reflect the current order index.
     return (
@@ -274,8 +278,15 @@ export function DevicesPage() {
                 </button>
                 <button class="primary" onClick={() => setAdding(true)} disabled={adding}>+ Add a device</button>
                 {!adding && <PermitJoinStatus />}
+                <input class="field-input" type="text" style="max-width:240px"
+                       placeholder="Filter by name, IEEE, model, vendor"
+                       aria-label="Filter devices"
+                       value={filterText}
+                       onInput={(e) => setFilterText(e.currentTarget.value)} />
                 <span class="toolbar-spacer" />
-                <span class="muted">{list.length} device{list.length === 1 ? "" : "s"}</span>
+                <span class="muted">
+                    {filterActive ? `${filtered.length} of ${list.length} devices` : `${list.length} device${list.length === 1 ? "" : "s"}`}
+                </span>
             </div>
 
             {adding && <AddDevicePanel onClose={() => setAdding(false)} />}
@@ -299,6 +310,8 @@ export function DevicesPage() {
                         — include the manufacturer and model it reports.
                     </p>
                 </div>
+            ) : filtered.length === 0 ? (
+                <p class="empty-text">No devices match "{filterText.trim()}".</p>
             ) : (
                 <table class="data-table devlist">
                     <thead>
@@ -315,7 +328,7 @@ export function DevicesPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {list.map((d, i) => (
+                        {filtered.map((d, i) => (
                             <tr key={d.ieee}>
                                 <td class="col-n">{i + 1}</td>
                                 <td>

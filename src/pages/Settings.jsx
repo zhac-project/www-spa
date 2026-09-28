@@ -11,6 +11,7 @@ import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/r
 import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
+import { copyText } from "../utils/clipboard.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
 
 export function SettingsPage() {
@@ -608,12 +609,8 @@ function RainMakerCard() {
     }, []);
 
     async function copyNodeId() {
-        try {
-            await navigator.clipboard.writeText(st?.node_id || "");
-            showToast("Node ID copied", "ok");
-        } catch (_) {
-            showToast("Clipboard unavailable — select and copy manually", "err");
-        }
+        const ok = await copyText(st?.node_id || "");
+        showToast(ok ? "Node ID copied" : "Clipboard unavailable — select and copy manually", ok ? "ok" : "err");
     }
 
     async function doAssoc(e) {
@@ -1049,17 +1046,14 @@ function ToggleRow({ label, checked, onChange }) {
 
 // Bearer token is rendered masked by default so a passing glance / a
 // DevTools screenshot doesn't leak it. Reveal is opt-in and per-mount —
-// no signal/store state, so navigating away re-masks. Copy uses the
-// Clipboard API guarded for non-secure contexts (where it throws).
+// no signal/store state, so navigating away re-masks. Copy goes through
+// utils/clipboard.js, which falls back off the Clipboard API on the
+// hub's plain-HTTP origin instead of just failing.
 function ApiTokenRow({ token }) {
     const [shown, setShown] = useState(false);
     async function copy() {
-        try {
-            await navigator.clipboard.writeText(token);
-            showToast("Token copied", "ok");
-        } catch (_) {
-            showToast("Clipboard unavailable — reveal + copy manually", "err");
-        }
+        const ok = await copyText(token);
+        showToast(ok ? "Token copied" : "Clipboard unavailable — reveal + copy manually", ok ? "ok" : "err");
     }
     return (
         <div class="field-hint" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">

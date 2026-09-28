@@ -5,6 +5,7 @@
 // so the main SPA bundle stays lean. Falls back to a disabled textarea
 // while the chunk is loading.
 import { useEffect, useRef, useState } from "preact/hooks";
+import { copyText } from "../utils/clipboard.js";
 
 export function LuaEditor({ value, onInput, rows = 16, onSave, onRun }) {
     const hostRef = useRef(null);
@@ -128,8 +129,7 @@ export function LuaEditor({ value, onInput, rows = 16, onSave, onRun }) {
     async function copyToClipboard() {
         const v = viewRef.current;
         const txt = v ? v.state.doc.toString() : (value ?? "");
-        try { await navigator.clipboard.writeText(txt); }
-        catch (_) { /* some browsers gate clipboard on secure contexts — fail quietly */ }
+        await copyText(txt);   // falls back off the Clipboard API on plain HTTP; never throws
     }
 
     if (loadErr) {

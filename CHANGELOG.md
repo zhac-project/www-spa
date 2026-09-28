@@ -10,11 +10,16 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Renaming a device left the old name showing everywhere except the device page itself**: no firmware event tells the SPA a rename happened, and the Devices list, the Rules device picker and the backup-restore merge all read a cached copy that renaming never touched. `renameDevice()` now patches that cache itself once the rename call succeeds, so every caller (device page, Devices list, backup restore) sees the new name immediately.
+- **Copy buttons did nothing on a hub reached over plain HTTP** (e.g. `http://10.42.0.66`): `navigator.clipboard` does not exist outside a secure context, so the RainMaker node-ID copy, the API token copy and the Lua editor's Copy button either showed "Clipboard unavailable" or failed silently. All three now go through a shared helper (`src/utils/clipboard.js`) that falls back to a hidden textarea + `document.execCommand("copy")`.
 - **A writable setting the device had not reported yet had no row anywhere**: the States tab listed only reported values and Commands only write-only ones, so e.g. a Neo alarm's melody (a Tuya MCU often reports settings only at power-up) could not be set. Writable state+set exposes without a value now get a row too.
 - **Weekly schedule: a day with fewer than four periods could not be saved.** The thermostat stores a short day padded with repeats of its last period, and the editor showed those repeats as entered rows, so saving any day (or copying Monday to the weekdays) failed with "start times must go up through the day" unless every row got a distinct time. Repeats of the last period now show as empty rows.
 
 ### Added
 
+- **Devices page: filter box.** A text field above the device table narrows rows by a case-insensitive substring of name, IEEE, model or vendor, and the count next to it reads "N of M" while a filter is active. Client-side only, not persisted; predicate lives in `src/utils/deviceFilter.js` with a test.
+- **Logs page: Copy button** next to Clear/Pause. Copies the currently visible lines (respecting the level filter) as plain text, one per line with time, level, tag and message, with a brief "Copied"/"Copy failed" toast.
+- **Info page: Cloud row + a third card.** The hub's card on the Info page now shows a "Cloud" row (Off / Connecting / Reconnecting / Connected / Disconnected, from the new `remote_state` status field) between MQTT and the Zigbee radio row, and its memory/CPU figures move out into their own "Resources" card so the first card stays a single screenful.
 - **Weekly schedule editor** on the device page, for thermostats that expose writable `schedule_<day>` strings (Saswell SEA801/SEA802 first): a Monday-to-Sunday grid of four periods (start time + °C), "Copy Monday to Tue–Fri", undo, and one Save that sends only the changed days. Days sent but not yet reported back by the (sleepy) valve show "waiting for device". Parsing, formatting and the pre-send check live in `src/schedule.js` with tests; the firmware still checks every write. The demo hub gains a Saswell valve to preview it (`npm run demo`).
 - **Diag page: Tasks card** (wired and single-chip hubs): CPU share per task over the last 5 s,
   core, priority, stack headroom; polled while the page is open.

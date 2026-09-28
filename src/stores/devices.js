@@ -72,8 +72,16 @@ export async function getDevice(ieee) {
     return call("device.get", { ieee });
 }
 
+// No firmware today broadcasts `device.updated` after a rename, so the
+// cached `devices` signal would otherwise keep showing the old name until
+// the next full device.list (e.g. a page reload). Patch it here instead --
+// every caller (DeviceDetail, the backup restore merge) goes through this
+// function and benefits.
 export async function renameDevice(ieee, name) {
-    return call("device.rename", { ieee, name });
+    const res = await call("device.rename", { ieee, name });
+    devices.value = devices.value.map(x =>
+        sameIeee(x.ieee, ieee) ? { ...x, name, friendly: name } : x);
+    return res;
 }
 
 export async function reinterviewDevice(ieee) {

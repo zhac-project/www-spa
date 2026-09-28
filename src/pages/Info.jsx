@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Info page — two cards (S3 + P4) on the dual-chip build, one card for the
-// chip that runs everything on single-chip and wired builds. Repaints on status.tick push
+// Info page — two cards (S3 + P4) on the dual-chip build, three cards (chip,
+// Resources, Help) for single-chip and wired builds. Repaints on status.tick push
 // events from `stores/status.js`. One mount-time refresh seeds the view
 // after a fresh navigation; we used to also poll every 5 s as a
 // "safety net" but that doubled the load on httpd and made the Info-page
@@ -17,6 +17,24 @@ import { LINKS } from "../links.js";
 function badgeFor(ok, warn = false) {
     if (ok) return <Badge kind="ok">Yes</Badge>;
     return warn ? <Badge kind="warn">No</Badge> : <Badge kind="err">No</Badge>;
+}
+
+// Same state names the WS `remote.status` command reports (see
+// remote_state_name / RemoteState in zhac-wired-core's api_remote.cpp) --
+// presentation only, no decisions beyond mapping a name to a badge.
+const CLOUD_BADGE = {
+    READY:          { kind: "ok",   label: "Connected" },
+    CONNECTING:     { kind: "warn", label: "Connecting" },
+    AUTHENTICATING: { kind: "warn", label: "Authenticating" },
+    BACKOFF:        { kind: "warn", label: "Reconnecting" },
+    IDLE_NO_WIFI:   { kind: "warn", label: "Disconnected" },
+    DISABLED:       { kind: null,   label: "Off" },
+};
+
+function cloudRow(d) {
+    if (d.remote_state == null) return null;
+    const entry = CLOUD_BADGE[d.remote_state] || { kind: "err", label: d.remote_state };
+    return ["Cloud", entry.kind ? <Badge kind={entry.kind}>{entry.label}</Badge> : entry.label];
 }
 
 function KV({ rows }) {
@@ -82,6 +100,7 @@ export function InfoPage() {
         ...memRows(p),
     ];
 
+    const cRow = cloudRow(d);
     const oneRows = [
         ["Firmware",       d.fw_version || d.fw || "—"],
         ["Web UI",         __UI_VERSION__],
@@ -92,10 +111,10 @@ export function InfoPage() {
         ...(d.hostname ? [["Hostname", d.hostname + ".local"]] : []),
         ["MAC",            d.mac || "—"],
         mqttRow,
+        ...(cRow ? [cRow] : []),
         radioRow,
         ["Devices",        d.device_count != null ? d.device_count : "—"],
         ["WS Clients",     d.ws_clients != null ? d.ws_clients : "—"],
-        ...memRows(d),
     ];
 
     return (
@@ -107,7 +126,10 @@ export function InfoPage() {
                         <Card title="P4 Core"><KV rows={p4Rows} /></Card>
                     </>
                 ) : kind ? (
-                    <Card title={chipName(d)}><KV rows={oneRows} /></Card>
+                    <>
+                        <Card title={chipName(d)}><KV rows={oneRows} /></Card>
+                        <Card title="Resources"><KV rows={memRows(d)} /></Card>
+                    </>
                 ) : null}
                 <Card title="Help">
                     <ul class="help-links">

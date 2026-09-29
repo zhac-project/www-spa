@@ -825,14 +825,14 @@ function ThrottleControl({ d, ieee }) {
     const [busy, setBusy] = useState(false);
     const save = async () => {
         const n = parseInt(val, 10);
-        if (Number.isNaN(n) || n < 0) { showToast("Enter milliseconds ≥ 0"); return; }
+        if (Number.isNaN(n) || n < 0) { showToast("Enter milliseconds ≥ 0", "err"); return; }
         setBusy(true);
         try {
             await call("device.options.set", { ieee, throttle_ms: n });
             showToast(n === 0 ? "Report throttle disabled"
-                              : `Report throttle set to ${n} ms`, SUCCESS);
+                              : `Report throttle set to ${n} ms`, "ok");
         } catch (_) {
-            showToast("Failed to set throttle");
+            showToast("Failed to set throttle", "err");
         } finally {
             setBusy(false);
         }
@@ -851,6 +851,53 @@ function ThrottleControl({ d, ieee }) {
             <p class="tab-hint">
                 Caps state updates to one per N&nbsp;ms (firmware-side). Use for
                 chatty sensors that report every few seconds. 0 disables.
+            </p>
+        </div>
+    );
+}
+
+// "No motion interval" of a sensor that reports motion but never "no motion"
+// (z2m option occupancy_timeout). PRESENTATION ONLY: the hub clears
+// occupancy that many seconds after the last motion, using the device
+// definition's default until a value is saved here. Shown only when
+// device.get carries occupancy_timeout_default (a firmware and a device that
+// have one).
+function NoMotionControl({ d, ieee }) {
+    const dflt = d.occupancy_timeout_default;
+    const [val, setVal] = useState(d.occupancy_timeout ?? dflt ?? "");
+    const [busy, setBusy] = useState(false);
+    if (!(dflt > 0)) return null;
+    const save = async () => {
+        const n = Number(val);
+        if (val === "" || !Number.isInteger(n) || n < 0 || n > 65535) {
+            showToast("Enter whole seconds, 0 to 65535", "err");
+            return;
+        }
+        setBusy(true);
+        try {
+            await call("device.options.set", { ieee, occupancy_timeout: n });
+            showToast(n === 0 ? "The hub will not clear motion" : `No motion ${n} s after the last motion`, "ok");
+        } catch (_) {
+            showToast("Failed to set the no motion interval", "err");
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <div class="opt-throttle">
+            <label class="form-row">
+                <span>No motion interval (s)</span>
+                <input type="number" min="0" max="65535" step="1" value={val}
+                       placeholder={String(dflt)} disabled={busy}
+                       onInput={e => setVal(e.currentTarget.value)} />
+            </label>
+            <button class="btn" disabled={busy} onClick={save}>
+                {busy ? "Saving…" : "Save"}
+            </button>
+            <p class="tab-hint">
+                This sensor reports motion but never "no motion", so the hub reports
+                no motion this many seconds after the last motion. Default {dflt} (like
+                zigbee2mqtt); 0 = never.
             </p>
         </div>
     );
@@ -1022,6 +1069,7 @@ function OptionsTab({ d, ieee }) {
     const exposes = (d.exposes || []).filter(e => e && e.category === "config");
     return (
         <div class="tab-panel">
+            <NoMotionControl d={d} ieee={ieee} />
             <ThrottleControl d={d} ieee={ieee} />
             <RainMakerExposeControl ieee={ieee} />
             <p class="tab-hint">

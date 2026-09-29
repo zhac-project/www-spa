@@ -22,18 +22,28 @@ test("every recipe builds well-formed rules", () => {
     }
 });
 
-test("motion light uses the timer pair", () => {
-    const [on, off] = buildRules(byId("motion_light"), { sensor: S, light: L, minutes: "2" }, { name: "Hall", timer: 4 });
-    assert.equal(on.dsl, `ON ${S}#occupancy=1 DO zigbee.set ${L} state 1 ; timer 4 120000 ENDON`);
+test("motion light: on with motion, off N minutes after it stops", () => {
+    // Rules fire on a change, so each rule reacts to one edge of occupancy:
+    // motion starts → light on and the off-timer cancelled (timer 4 0);
+    // motion stops → the off-timer starts; the timer ends → light off.
+    const rules = buildRules(byId("motion_light"), { sensor: S, light: L, minutes: "2" }, { name: "Hall", timer: 4 });
+    assert.equal(rules.length, 3);
+    const [on, stop, off] = rules;
+    assert.equal(on.dsl, `ON ${S}#occupancy=1 DO zigbee.set ${L} state 1 ; timer 4 0 ENDON`);
+    assert.equal(stop.dsl, `ON ${S}#occupancy=0 DO timer 4 120000 ENDON`);
     assert.equal(off.dsl, `ON Rules#Timer=4 DO zigbee.set ${L} state 0 ENDON`);
+    assert.equal(on.name, "Hall");
+    assert.equal(stop.name, "Hall (motion stopped)");
     assert.equal(off.name, "Hall (off timer)");
+    assert.match(describe(byId("motion_light"), { sensor: S, light: L, minutes: "2" }), /2 minutes after .*stops/);
+    assert.equal(freeTimerIndex(rules.map(r => r.dsl)), 1, "all three rules claim timer 4 only");
 });
 
 test("scheduled off turns a time into a cron", () => {
     const [r] = buildRules(byId("scheduled_off"), { light: L, time: "7:05" }, { name: "Off" });
     assert.equal(r.dsl, `ON Time#Cron=0 5 7 * * * DO zigbee.set ${L} state 0 ENDON`);
     assert.equal(missingField(byId("scheduled_off"), { light: L, time: "" }), "At");
-    assert.equal(missingField(byId("motion_light"), { sensor: S, light: L, minutes: 0 }), "Off after (minutes)");
+    assert.equal(missingField(byId("motion_light"), { sensor: S, light: L, minutes: 0 }), "Off after no motion for (minutes)");
     assert.equal(missingField(byId("motion_light"), { light: L, minutes: 5 }), "Motion sensor");
 });
 

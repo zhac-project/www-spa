@@ -10,12 +10,22 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Device page → Options: saving the report throttle showed no confirmation and threw in the console**: the toast was given the `withToast` success sentinel (a Symbol) as its style, which the toast cannot render. It now gets "ok" / "err".
+
 - **Settings switches sprang back a few seconds after being changed** (Metrics, Auth, Stream logs to MQTT, …): the page never re-read the hub's settings after a change, so the next status push redrew each switch from the old value although the hub had applied the new one. Settings now re-reads status after every change it saves.
 
 - **Renaming a device left the old name showing everywhere except the device page itself**: no firmware event tells the SPA a rename happened, and the Devices list, the Rules device picker and the backup-restore merge all read a cached copy that renaming never touched. `renameDevice()` now patches that cache itself once the rename call succeeds, so every caller (device page, Devices list, backup restore) sees the new name immediately.
 - **Copy buttons did nothing on a hub reached over plain HTTP** (e.g. `http://10.42.0.66`): `navigator.clipboard` does not exist outside a secure context, so the RainMaker node-ID copy, the API token copy and the Lua editor's Copy button either showed "Clipboard unavailable" or failed silently. All three now go through a shared helper (`src/utils/clipboard.js`) that falls back to a hidden textarea + `document.execCommand("copy")`.
 - **A writable setting the device had not reported yet had no row anywhere**: the States tab listed only reported values and Commands only write-only ones, so e.g. a Neo alarm's melody (a Tuya MCU often reports settings only at power-up) could not be set. Writable state+set exposes without a value now get a row too.
 - **Weekly schedule: a day with fewer than four periods could not be saved.** The thermostat stores a short day padded with repeats of its last period, and the editor showed those repeats as entered rows, so saving any day (or copying Monday to the weekdays) failed with "start times must go up through the day" unless every row got a distinct time. Repeats of the last period now show as empty rows.
+
+### Added
+
+- **Device page → Options: "No motion interval (s)"** for motion sensors that report motion but never "no motion" (the ones zigbee2mqtt gives the `occupancy_timeout` option: Aqara/Xiaomi PIRs, Tuya TS0202_1/SM0202, Bitron, Konke, Hive, …): the hub reports no motion that many seconds after the last motion. Shows the interval in force with the device's default ("Default 90 (like zigbee2mqtt)"; Aqara RTCGQ12/13/15LM 62, RTCGQ14LM 32), 0 = never; saved through `device.options.set`. Shown only when the firmware's `device.get` carries `occupancy_timeout_default`.
+
+### Changed
+
+- **Recipe "Light on with motion" now turns the light off N minutes after the motion stops** (it counted from when motion started): three rules — motion starts → light on and the off-timer stopped (`timer <n> 0`); motion stops → the timer starts; it runs out → light off. Works with the hub's change-only triggers. The rule help's motion example shows the same pattern and uses timer 1 (the help said 0–7; the hub takes 1–8).
 
 ### Added
 

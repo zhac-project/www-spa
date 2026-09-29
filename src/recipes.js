@@ -26,17 +26,24 @@ const dev = (key, label, expose, writable = false) => ({ key, label, kind: "devi
 
 export const RECIPES = [
     {
+        // Rules fire on a change of value, so each rule takes one edge of
+        // `occupancy`: motion starts → light on, and the off-timer (if it was
+        // counting) is cancelled with `timer <n> 0`; motion stops → the timer
+        // starts; it runs out → light off. Sensors that never report "no
+        // motion" get one from the hub's no-motion interval (device options).
         id: "motion_light",
-        title: "Light on with motion, off a few minutes later",
+        title: "Light on with motion, off a few minutes after it stops",
         fields: [dev("sensor", "Motion sensor", "occupancy"), dev("light", "Light or plug", "state", true),
-                 { key: "minutes", label: "Off after (minutes)", kind: "minutes", def: 5, min: 1, max: 120 }],
+                 { key: "minutes", label: "Off after no motion for (minutes)", kind: "minutes", def: 5, min: 1, max: 120 }],
         rules: (v, ctx) => [
             { name: ctx.name,
-              dsl: `ON ${v.sensor}#occupancy=1 DO zigbee.set ${v.light} state 1 ; timer ${ctx.timer} ${v.minutes * 60000} ENDON` },
+              dsl: `ON ${v.sensor}#occupancy=1 DO zigbee.set ${v.light} state 1 ; timer ${ctx.timer} 0 ENDON` },
+            { name: `${ctx.name} (motion stopped)`,
+              dsl: `ON ${v.sensor}#occupancy=0 DO timer ${ctx.timer} ${v.minutes * 60000} ENDON` },
             { name: `${ctx.name} (off timer)`,
               dsl: `ON Rules#Timer=${ctx.timer} DO zigbee.set ${v.light} state 0 ENDON` },
         ],
-        describe: (v, n) => `When ${n(v.sensor)} sees motion, turn ${n(v.light)} on, and turn it off ${v.minutes} minute${v.minutes == 1 ? "" : "s"} after that.`,
+        describe: (v, n) => `When ${n(v.sensor)} sees motion, turn ${n(v.light)} on, and turn it off ${v.minutes} minute${v.minutes == 1 ? "" : "s"} after the motion stops.`,
         test: v => ({ ieee: v.light, key: "state", value: true }),
     },
     {

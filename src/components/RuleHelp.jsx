@@ -33,7 +33,7 @@ ON door sensor#contact DO event motion ENDON`}</pre>
             <pre class="dsl-snippet">{`ON System#Boot           DO ... ENDON
 ON Time#Cron=0 0 22 * * *  DO ... ENDON     // sec min hour mday mon wday
 ON Event#motion_detected DO ... ENDON
-ON Rules#Timer=0         DO ... ENDON     // index 0–7
+ON Rules#Timer=1         DO ... ENDON     // index 1–8
 ON Mqtt#home/alarm       DO ... ENDON`}</pre>
 
             <h4>Actions</h4>
@@ -41,7 +41,7 @@ ON Mqtt#home/alarm       DO ... ENDON`}</pre>
 zigbee.toggle <device> <key>           // flip binary attr (0↔1)
 publish <topic> <payload>              // MQTT publish
 event <name>                           // fire internal event
-timer <index> <ms>                     // start countdown
+timer <index> <ms>                     // start countdown (ms 0 = stop it)
 log <message>                          // serial log (INFO)
 script.run "<name>"                    // run /scripts/<name>.lua`}</pre>
             <p class="field-hint">Device names in actions are a single token, no quotes — rename
@@ -59,9 +59,10 @@ ON room#temperature DO publish home/temp/c %value%/100      ENDON  // ×100 floa
             or a non-numeric trigger value skips the action.</p>
 
             <h4>Examples</h4>
-            <p><b>Motion → light on for 5 minutes</b></p>
-            <pre class="dsl-snippet">{`ON motion sensor#occupancy=1 DO zigbee.set hallway_light state 1 ; timer 0 300000 ENDON
-ON Rules#Timer=0 DO zigbee.set hallway_light state 0 ENDON`}</pre>
+            <p><b>Motion → light on, off 5 minutes after the motion stops</b></p>
+            <pre class="dsl-snippet">{`ON motion sensor#occupancy=1 DO zigbee.set hallway_light state 1 ; timer 1 0 ENDON
+ON motion sensor#occupancy=0 DO timer 1 300000 ENDON
+ON Rules#Timer=1 DO zigbee.set hallway_light state 0 ENDON`}</pre>
 
             <p><b>Door open → MQTT alert + log</b></p>
             <pre class="dsl-snippet">ON front door#contact=0 DO publish home/door opened ; log door opened ENDON</pre>

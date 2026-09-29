@@ -8,6 +8,10 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Added
+
+- **"Restart hub" button** (Settings → Misc, wired hub only, gated on the firmware reporting `restart: true` in `/api/status`/`status.get` so older firmware just doesn't show it): confirms ("Restart the hub now? Devices stay paired…"), sends WS `system.restart`, then shows "Restarting…" until the WebSocket actually drops and reconnects (not just until the command replies), then "Hub is back" for a few seconds. Reuses the existing auto-reconnect in `src/ws/client.js` and the header's connected flag — no new polling loop.
+
 ### Fixed
 
 - **Device page → Options: saving the report throttle showed no confirmation and threw in the console**: the toast was given the `withToast` success sentinel (a Symbol) as its style, which the toast cannot render. It now gets "ok" / "err".

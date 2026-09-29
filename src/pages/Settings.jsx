@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
 import { status, hubKind, lendBrowserClock, bootstrapStatus } from "../stores/status.js";
 import { ZONE_NAMES, posixFor, zoneLabel, browserZone, pickZone } from "../tz.js";
-import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
+import { ui, showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
 import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
 import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
@@ -320,6 +320,15 @@ export function SettingsPage() {
                         <ApiTokenRow token={d.api_token} />
                     )}
                     <ApiTokenSetupRow />
+                    {d.restart && (
+                        <>
+                            <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                <RestartHubButton />
+                                <span class="field-hint">Devices stay paired.</span>
+                            </div>
+                        </>
+                    )}
                 </Card>
 
                 {d.auth_enabled && <ChangePasswordCard />}
@@ -1087,6 +1096,46 @@ function MetricsMqttRows({ d, write }) {
                 Save interval
             </button>
         </>
+    );
+}
+
+// Restart hub — WS `system.restart` (firmware advertises it via
+// status.restart; older firmware without the command just doesn't get this
+// button, see the `d.restart` guard above). Nothing is erased. "restarting"
+// -> "back" is driven by the header's own connected flag (ui.value.connected,
+// same one app.jsx's WS dot reads): the socket drops when the hub actually
+// restarts and ws/client.js auto-reconnects, so seeing it come back up after
+// having gone down is proof the reboot happened, not just that the call
+// returned.
+function RestartHubButton() {
+    const [state, setState] = useState("idle");   // idle | restarting | back
+    const sawDown = useRef(false);
+    const connected = ui.value.connected;
+
+    useEffect(() => {
+        if (state !== "restarting") return;
+        if (!connected) { sawDown.current = true; return; }
+        if (sawDown.current) { sawDown.current = false; setState("back"); }
+    }, [connected, state]);
+
+    useEffect(() => {
+        if (state !== "back") return;
+        const t = setTimeout(() => setState("idle"), 4000);
+        return () => clearTimeout(t);
+    }, [state]);
+
+    async function doRestart() {
+        if (!confirm("Restart the hub now? Devices stay paired; it's back in about 10 seconds.")) return;
+        try { await call("system.restart"); }
+        catch (e) { showToast("Restart failed: " + e.message, "err"); return; }
+        sawDown.current = false;
+        setState("restarting");
+    }
+
+    return (
+        <button type="button" class="secondary small" disabled={state !== "idle"} onClick={doRestart}>
+            {state === "restarting" ? "Restarting…" : state === "back" ? "Hub is back" : "Restart hub"}
+        </button>
     );
 }
 

@@ -145,13 +145,16 @@ function status() {
         ...(process.env.DEMO_RADIO_DOWN ? { radio_error: "radio_crashed" } : {}),
         clock_set: demoClockSet,
         ntp_server: demoNtpServer,
+        timezone: demoTz,   // the firmware formats local_time in it; the demo just uses this machine's clock
+        ...(demoClockSet ? { local_time: new Date().toLocaleString("sv-SE").slice(0, 16) } : {}),
+        metrics_mqtt_enabled: demoMetricsMqtt, metrics_mqtt_interval_s: demoMetricsSecs,
         ...(process.env.DEMO_NTP_DHCP && demoNtpServer === "pool.ntp.org" ? { ntp_dhcp_server: "192.168.1.1" } : {}),
         ota: true, fw: "v2026091801",
         ...(process.env.DEMO_STORAGE_ERROR ? { storage_error: true } : {}),
         ota_state: process.env.DEMO_OTA_PENDING ? "pending" : "verified",
         ...(process.env.DEMO_OTA_ROLLBACK ? { ota_rollback_reason: "Zigbee radio not ready (it was before the update)" } : {}),
         auth_enabled: false,
-        metrics_enabled: false, ap_disabled: true, log_mqtt_enabled: false, log_ws_enabled: true,
+        metrics_enabled: demoMetrics, ap_disabled: true, log_mqtt_enabled: false, log_ws_enabled: true,
         mqtt_broker: "mqtt://192.168.1.10", mqtt_client_id: "", ha_discovery: true, ha_prefix: "homeassistant",
     };
 }
@@ -177,6 +180,8 @@ function logs() {
 const find = (ieee) => DEVICES.find((d) => d.ieee.toLowerCase() === String(ieee || "").toLowerCase());
 let demoClockSet = !process.env.DEMO_CLOCK_UNSET;
 let demoNtpServer = "pool.ntp.org";
+let demoTz = "";
+let demoMetrics = false, demoMetricsMqtt = false, demoMetricsSecs = 60;
 const COMMANDS = {
     "status.get": status,
     // Same rule as the firmware (zap_clock.h): fills an unset clock only.
@@ -188,6 +193,10 @@ const COMMANDS = {
     },
     "settings.set": (a) => {
         if (a.ntp_server !== undefined) demoNtpServer = String(a.ntp_server) || "pool.ntp.org";
+        if (typeof a.timezone === "string") demoTz = a.timezone;
+        if (typeof a.metrics_enabled === "boolean") demoMetrics = a.metrics_enabled;
+        if (typeof a.metrics_mqtt_enabled === "boolean") demoMetricsMqtt = a.metrics_mqtt_enabled;
+        if (Number.isInteger(a.metrics_mqtt_interval_s)) demoMetricsSecs = Math.min(60, Math.max(1, a.metrics_mqtt_interval_s));
         return {};
     },
     "device.list": () => DEVICES.map(row),

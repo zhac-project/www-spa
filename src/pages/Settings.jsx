@@ -4,7 +4,8 @@
 // OTA inputs, danger-zone reset. Every action maps to a WS command.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { call } from "../ws/client.js";
-import { status, hubKind, lendBrowserClock } from "../stores/status.js";
+import { status, hubKind, lendBrowserClock, bootstrapStatus } from "../stores/status.js";
+import { ZONE_NAMES, posixFor, zoneLabel, browserZone, pickZone } from "../tz.js";
 import { showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from "../stores/ui.js";
 import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
 import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
@@ -22,6 +23,12 @@ export function SettingsPage() {
     // Time ----------------------------------------------------------------
     const [ntp, setNtp] = useState("");
     useEffect(() => { if (d.ntp_server != null && !ntp) setNtp(d.ntp_server); }, [d.ntp_server]);
+    // Timezone, on firmwares that report `timezone`: undefined until status
+    // lands, null for a string set some other way (Save leaves it alone).
+    const [zone, setZone] = useState(undefined);
+    useEffect(() => {
+        if (d.timezone != null && zone === undefined) setZone(pickZone(d.timezone, browserZone()));
+    }, [d.timezone]);
 
     async function useThisClock() {
         const ok = await lendBrowserClock();
@@ -90,9 +97,12 @@ export function SettingsPage() {
     // Firmwares without the Home Assistant bridge do not report the field.
     const haSupported = d.ha_discovery !== undefined;
 
+    // Re-reads status afterwards: the toggles show what the hub now reports
+    // (status.tick carries no settings), and the hub clock shows the new zone.
     async function writeSettings(patch, successMsg) {
         try { await call("settings.set", patch); showToast(successMsg || "Saved", "ok"); }
-        catch (e) { showToast("Failed: " + e.message, "err"); }
+        catch (e) { showToast("Failed: " + e.message, "err"); return; }
+        bootstrapStatus().catch(() => {});
     }
 
     // OTA -----------------------------------------------------------------
@@ -238,9 +248,20 @@ export function SettingsPage() {
                         <label>Time server<input type="text" value={ntp} placeholder="pool.ntp.org"
                                                   maxLength={63}
                                                   onInput={(e) => setNtp(e.currentTarget.value)} /></label>
+                        {d.timezone !== undefined && (
+                            <label>Timezone
+                                <select value={zone || ""} onChange={(e) => setZone(e.currentTarget.value)}>
+                                    {zone === null && <option value="">{d.timezone}</option>}
+                                    {ZONE_NAMES.map((z) => <option key={z} value={z}>{zoneLabel(z)}</option>)}
+                                </select>
+                            </label>
+                        )}
+                        {d.local_time && <p class="field-hint">Hub time now: {d.local_time}</p>}
                         <div class="btn-strip" style="margin-top:8px">
                             <button class="primary small"
-                                    onClick={() => writeSettings({ ntp_server: ntp.trim() }, "Time server saved")}>
+                                    onClick={() => writeSettings(zone
+                                        ? { ntp_server: ntp.trim(), timezone: posixFor(zone) }
+                                        : { ntp_server: ntp.trim() }, "Time settings saved")}>
                                 Save
                             </button>
                             {d.clock_set === false &&
@@ -294,6 +315,7 @@ export function SettingsPage() {
                     <ToggleRow label="Stream logs to MQTT"
                                checked={!!d.log_mqtt_enabled}
                                onChange={(v) => writeSettings({ log_mqtt_enabled: v })} />
+                    {d.metrics_mqtt_enabled !== undefined && <MetricsMqttRows d={d} write={writeSettings} />}
                     {d.auth_enabled && d.api_token && (
                         <ApiTokenRow token={d.api_token} />
                     )}
@@ -1031,11 +1053,48 @@ function RemoteCard() {
 
 // ---------------------------------------------------------------------------
 
-function ToggleRow({ label, checked, onChange }) {
+// "Stream metrics to MQTT": the Info page's Resources figures on
+// <root>/bridge/metrics, plus Home Assistant sensors on the hub while discovery
+// is on. Needs Metrics and the MQTT client, which the firmware checks again;
+// the interval is 1-60 s here and clamped there too.
+function MetricsMqttRows({ d, write }) {
+    const [secs, setSecs] = useState("");
+    useEffect(() => {
+        if (d.metrics_mqtt_interval_s != null) setSecs(String(d.metrics_mqtt_interval_s));
+    }, [d.metrics_mqtt_interval_s]);
+    const missing = [!d.metrics_enabled && "Metrics", !d.mqtt_enabled && "MQTT"].filter(Boolean);
     return (
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <>
+            <ToggleRow label="Stream metrics to MQTT"
+                       checked={!!d.metrics_mqtt_enabled}
+                       disabled={missing.length > 0 && !d.metrics_mqtt_enabled}
+                       onChange={(v) => write({ metrics_mqtt_enabled: v })} />
+            <p class="field-hint" style="margin:-4px 0 8px">
+                {missing.length
+                    ? `Needs ${missing.join(" and ")} turned on.`
+                    : `To ${d.mqtt_root_topic || "zhac"}/bridge/metrics${d.ha_discovery ? ", with Home Assistant sensors on the hub" : ""}.`}
+            </p>
+            <label>Metrics interval, seconds (1–60)
+                <input type="number" min="1" max="60" step="1" value={secs}
+                       onInput={(e) => setSecs(e.currentTarget.value)} />
+            </label>
+            <button class="small" style="margin-bottom:8px" disabled={!secs}
+                    onClick={() => {
+                        const s = Math.min(60, Math.max(1, Math.round(Number(secs))));
+                        setSecs(String(s));
+                        write({ metrics_mqtt_interval_s: s }, `Metrics every ${s} s`);
+                    }}>
+                Save interval
+            </button>
+        </>
+    );
+}
+
+function ToggleRow({ label, checked, onChange, disabled = false }) {
+    return (
+        <div style={`display:flex;align-items:center;gap:10px;margin-bottom:8px${disabled ? ";opacity:.55" : ""}`}>
             <label class="toggle">
-                <input type="checkbox" checked={checked}
+                <input type="checkbox" checked={checked} disabled={disabled}
                        onChange={(e) => onChange(e.currentTarget.checked)} />
                 <span class="toggle-slider" />
             </label>

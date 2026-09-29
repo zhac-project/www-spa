@@ -49,6 +49,15 @@ export function fmtAgo(sec) {
     return fmtUptime(delta) + " ago";
 }
 
+// A rule's last_skip code (rules.status) as a short phrase.
+export function fmtSkip(code) {
+    if (!code) return "";
+    if (code === "unchanged") return "last report: no change";
+    if (code === "condition_false") return "last report: condition not met";
+    if (code.startsWith("action_error:")) return `last run: ${code.slice(13)} failed`;
+    return code;
+}
+
 export function hex16(n) {
     if (n == null) return "—";
     return "0x" + Number(n).toString(16).toUpperCase().padStart(4, "0");

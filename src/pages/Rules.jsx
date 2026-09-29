@@ -7,7 +7,8 @@ import { useEffect, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { status, bootstrapStatus, lendBrowserClock } from "../stores/status.js";
 import { rules, bootstrapRules, createRule, updateRule, enableRule,
-         deleteRule as delRuleCall } from "../stores/rules.js";
+         deleteRule as delRuleCall, runRule, ruleStatus, refreshRuleStatus } from "../stores/rules.js";
+import { fmtAgo, fmtSkip } from "../utils.js";
 import { devices, bootstrapDevices, getDevice, setDeviceAttr } from "../stores/devices.js";
 import { showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { Modal } from "../components/Modal.jsx";
@@ -167,6 +168,15 @@ export function RulesPage() {
         if (devices.value.length === 0) bootstrapDevices().catch(() => {});
     }, []);
 
+    // Run status: polled while the page is visible (the hub pushes no "fired" event).
+    useEffect(() => {
+        const tick = () => { if (document.visibilityState === "visible") refreshRuleStatus(); };
+        tick();
+        const t = setInterval(tick, 5000);
+        document.addEventListener("visibilitychange", tick);
+        return () => { clearInterval(t); document.removeEventListener("visibilitychange", tick); };
+    }, []);
+
     async function useThisClock() {
         const ok = await lendBrowserClock();
         showToast(ok ? "Hub clock set from this device" : "The hub did not take the time",
@@ -198,6 +208,11 @@ export function RulesPage() {
         await withToast(() => delRuleCall(r.id), "Deleted", "Delete failed");
     }
 
+    async function runNow(r) {
+        await withToast(() => runRule(r.id), `Ran ${r.name || "rule " + r.id}`, "Run failed");
+        refreshRuleStatus();
+    }
+
     async function save() {
         if (!editing) return;
         const body = { name: (editing.name || "").trim(), dsl: editing.dsl || "" };
@@ -211,6 +226,7 @@ export function RulesPage() {
 
     const devs = devices.value;
     const isNew = editing && editing.id == null;
+    const stat = ruleStatus.value;   // null: this firmware has no rules.status
 
     return (
         <div class="page">
@@ -236,6 +252,7 @@ export function RulesPage() {
                         {rules.value.map(r => {
                             const dsl = r.dsl || r.src || "";
                             const unknown = devs.length ? unknownRefs(dsl, devs) : [];
+                            const s = stat && stat[r.id];
                             return (
                                 <tr key={r.id}>
                                     <td>{r.id}</td>
@@ -247,6 +264,10 @@ export function RulesPage() {
                                                 {" "}⚠ unknown device: {unknown.join(", ")}
                                             </span>
                                         )}
+                                        {s && <div class="muted" title={s.last_skip || ""}>
+                                            {s.runs ? `Last ran ${fmtAgo(s.ago)} · ${s.runs} run${s.runs === 1 ? "" : "s"}` : "Never ran"}
+                                            {s.last_skip ? " · " + fmtSkip(s.last_skip) : ""}
+                                        </div>}
                                     </td>
                                     <td>
                                         <label class="toggle">
@@ -256,6 +277,8 @@ export function RulesPage() {
                                         </label>
                                     </td>
                                     <td>
+                                        {stat && <><button class="small" onClick={() => runNow(r)}
+                                            title="Run the actions now, as if the trigger had fired">Run now</button>{" "}</>}
                                         <button class="small" onClick={() => openEdit(r)}>Edit</button>{" "}
                                         <button class="small danger" onClick={() => remove(r)}>Del</button>
                                     </td>

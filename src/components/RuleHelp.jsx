@@ -16,9 +16,12 @@ export function RuleHelp() {
             <p class="field-hint">Up to 4 actions per rule, separated by <code>;</code>.</p>
 
             <h4>Triggers</h4>
-            <p><b>Device attribute change</b> — fires when a device reports a value:</p>
+            <p><b>Device attribute change</b> — fires when the value changes:</p>
             <pre class="dsl-snippet">{`ON <device>#<attr>[<op><value>] DO ... ENDON`}</pre>
-            <p class="field-hint">Operators: <code>=</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>; omit for "any change".</p>
+            <p class="field-hint">Operators: <code>=</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>; omit for "any change".
+                A comparison fires when it becomes true, not again while it stays true; a repeated
+                report of the same value (a sensor's heartbeat, a reboot) fires nothing.
+                <code>action</code>, <code>click</code>, <code>event</code> and <code>scene</code> fire on every report.</p>
             <pre class="dsl-snippet">{`ON kitchen switch#action="single" DO zigbee.set kitchen_light state 1 ENDON
 ON 0x001234567890ABCD#temperature>2500 DO publish home/alert hot ENDON
 ON door sensor#contact DO event motion ENDON`}</pre>

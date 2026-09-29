@@ -29,6 +29,7 @@ across the ZHAC platform.
 
 ### Changed
 
+- **External links point at zhac.org.** The browser-flasher link (Settings → Update) is now `https://zhac.org/flash/`, and "Supported devices" (Info page) opens the searchable list at `https://zhac.org/devices/` instead of the GitHub-rendered brand list (`src/links.js`). The old github.io address only redirects.
 - **Recipe "Light on with motion" now turns the light off N minutes after the motion stops** (it counted from when motion started): three rules — motion starts → light on and the off-timer stopped (`timer <n> 0`); motion stops → the timer starts; it runs out → light off. Works with the hub's change-only triggers. The rule help's motion example shows the same pattern and uses timer 1 (the help said 0–7; the hub takes 1–8).
 
 ### Added

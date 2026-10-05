@@ -62,3 +62,10 @@ export function hex16(n) {
     if (n == null) return "—";
     return "0x" + Number(n).toString(16).toUpperCase().padStart(4, "0");
 }
+
+// script.reload's answer as the Scripts page's Apply toast (spec 2026-10-05 §3.10): {loaded, total}, or
+// {queued: true} when the hub was still restarting scripts after 5 s.
+export function reloadText(r) {
+    if (!r || r.queued) return "The hub is still restarting scripts";
+    return `Scripts restarted: ${r.loaded} of ${r.total} started`;
+}

@@ -12,6 +12,10 @@ across the ZHAC platform.
 
 - **"Restart hub" button** (Settings → Misc, wired hub only, gated on the firmware reporting `restart: true` in `/api/status`/`status.get` so older firmware just doesn't show it): confirms ("Restart the hub now? Devices stay paired…"), sends WS `system.restart`, then shows "Restarting…" until the WebSocket actually drops and reconnects (not just until the command replies), then "Hub is back" for a few seconds. Reuses the existing auto-reconnect in `src/ws/client.js` and the header's connected flag — no new polling loop.
 
+- **Settings → Remote: "Allow script changes from the cloud"** (wired hubs whose `status` reports `remote_scripts`): when on, people with Owner or Admin access to this hub in ZHAC Cloud can save, run and restart Lua scripts, and restart the hub; only this page can turn it on.
+
+- **Scripts → Apply** (same firmware): restarts the Lua engine (`script.reload`) so handlers use the saved text, and says "Scripts restarted: 3 of 3 started", or "The hub is still restarting scripts" after 5 s.
+
 ### Fixed
 
 - **Firmware → Install on a P4+C6 wired hub installed the C6 radio installer instead of the hub firmware**: the release picker kept every `-ota.bin` whose name contained the chip token, and each wired release since v2026092601 also carries `zhac-c6-rcp-installer-p4-rev1x-<tag>-ota.bin` (a one-off P4 app that writes the C6 radio), which GitHub lists first and Install took. The hub ran it, dropped off the network and only rolled back after a power cycle. Assets are now matched by exact product prefix and chip (`zhac-wired-p4-…`, `zhac-wired-s31-…`, `zhac-dualchip-…`, `zhac-mono-…`), so the installer can never be offered. S31 hubs were not affected.

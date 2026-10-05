@@ -345,7 +345,7 @@ export function SettingsPage() {
                             onClick={() => navigate("ota")}>Open OTA page</button>
                 </Card>
 
-                {d.remote_available && <RemoteCard />}
+                {d.remote_available && <RemoteCard d={d} write={writeSettings} />}
             </div>
         </div>
     );
@@ -971,7 +971,7 @@ function RemoteStateBadge({ state }) {
     return <Badge kind={entry.kind}>{entry.label}</Badge>;
 }
 
-function RemoteCard() {
+function RemoteCard({ d, write }) {
     const [url,      setUrl]      = useState("");
     const [token,    setToken]    = useState("");
     const [deviceId, setDeviceId] = useState("");
@@ -1037,6 +1037,20 @@ function RemoteCard() {
                 <button class="secondary small" onClick={doDisconnect}>Disconnect</button>
                 <button class="danger small" onClick={doForget}>Forget credentials</button>
             </div>
+            {d.remote_scripts !== undefined && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <ToggleRow label="Allow script changes from the cloud"
+                               checked={!!d.remote_scripts}
+                               style=";min-height:44px;margin-bottom:0"
+                               onChange={(v) => write({ remote_scripts: v },
+                                   v ? "Script changes from the cloud are allowed" : "Script changes from the cloud are off")} />
+                    <p class="field-hint" style="margin:0 0 4px;line-height:1.45">
+                        When on, people with Owner or Admin access to this hub in ZHAC Cloud can save, run and restart
+                        Lua scripts, and restart the hub. Only this page can turn it on.
+                    </p>
+                </>
+            )}
             {st && (
                 <>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
@@ -1139,9 +1153,9 @@ function RestartHubButton() {
     );
 }
 
-function ToggleRow({ label, checked, onChange, disabled = false }) {
+function ToggleRow({ label, checked, onChange, disabled = false, style = "" }) {
     return (
-        <div style={`display:flex;align-items:center;gap:10px;margin-bottom:8px${disabled ? ";opacity:.55" : ""}`}>
+        <div style={`display:flex;align-items:center;gap:10px;margin-bottom:8px${disabled ? ";opacity:.55" : ""}${style}`}>
             <label class="toggle">
                 <input type="checkbox" checked={checked} disabled={disabled}
                        onChange={(e) => onChange(e.currentTarget.checked)} />

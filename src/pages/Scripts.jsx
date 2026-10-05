@@ -4,11 +4,12 @@
 // Scripts are named (lowercase, [-_a-z0-9], max 24 chars); file size reported
 // by the server. Editor uses the plain CodeEditor component (textarea + gutter).
 import { SCRIPT_TEMPLATES } from "../templates.js";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { scripts, bootstrapScripts, readScript, writeScript,
-         deleteScript as delScript, runScript } from "../stores/scripts.js";
+         deleteScript as delScript, runScript, reloadScripts } from "../stores/scripts.js";
 import { showToast } from "../stores/ui.js";
-import { fmtBytes } from "../utils.js";
+import { fmtBytes, reloadText } from "../utils.js";
+import { status, bootstrapStatus } from "../stores/status.js";
 import { Modal } from "../components/Modal.jsx";
 import { LuaEditor } from "../components/LuaEditor.jsx";
 import { ScriptHelp } from "../components/ScriptHelp.jsx";
@@ -19,6 +20,20 @@ export function ScriptsPage() {
     const [editing, setEditing] = useState(null); // { name, src, isNew }
     const [loading, setLoading] = useState(false);
     const [tab, setTab] = useState("src");         // "src" | "help"
+    const [applying, setApplying] = useState(false);
+    // Apply shows only on firmware that reports remote_scripts (spec 2026-10-05 §3.10).
+    useEffect(() => { bootstrapStatus().catch(() => {}); }, []);
+
+    // Green only when the restart finished; "still restarting" is the neutral toast.
+    async function apply() {
+        setApplying(true);
+        try {
+            const r = await reloadScripts();
+            showToast(reloadText(r), (!r || r.queued) ? "info" : "ok");
+        }
+        catch (e) { showToast("Apply failed: " + e.message, "err"); }
+        finally { setApplying(false); }
+    }
 
     async function openEdit(name) {
         setLoading(true);
@@ -66,8 +81,15 @@ export function ScriptsPage() {
     return (
         <div class="page">
             <div class="toolbar">
-                <button onClick={() => bootstrapScripts().catch(e => showToast(e.message, "err"))}>Refresh</button>
-                <button class="primary" onClick={openNew}>+ New Script</button>
+                <button style="min-height:44px"
+                        onClick={() => bootstrapScripts().catch(e => showToast(e.message, "err"))}>Refresh</button>
+                {status.value.remote_scripts !== undefined && (
+                    <button style="min-height:44px" onClick={apply} disabled={applying}
+                            title="Restart the scripts, so handlers use the saved text">
+                        {applying ? "Applying…" : "Apply"}
+                    </button>
+                )}
+                <button class="primary" style="min-height:44px" onClick={openNew}>+ New Script</button>
             </div>
 
             {scripts.value.length === 0 ? (

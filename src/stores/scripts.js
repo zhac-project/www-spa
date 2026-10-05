@@ -13,6 +13,8 @@ export const bootstrapScripts = store.bootstrap;
 export function readScript(name)           { return call("script.read",  { name }); }
 export function deleteScript(name)         { return call("script.delete",{ name }); }
 export function runScript(name, args = {}) { return call("script.run",   { name, args }); }
+// Apply: restart the Lua engine so handlers use the saved text (firmware that reports remote_scripts).
+export function reloadScripts()            { return call("script.reload"); }
 
 // Saves go via HTTP POST instead of WS — the esp_http_server WebSocket
 // path caps inbound frames at CONFIG_HTTPD_WS_RECEIVE_BUFFER (~4 KB

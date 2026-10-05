@@ -7,10 +7,18 @@
 // and hands the hub that one download URL, exactly as the URL form does.
 //
 // Asset naming is the contract with the release workflows:
-//   zhac-wired-core:  zhac-wired-p4-rev1x-<tag>-ota.bin  (also -s31- one day)
-//   zhac-platform:    zhac-dualchip-s3-<tag>-ota.bin, zhac-dualchip-p4-<tag>-ota.bin
+//   zhac-wired-core:  zhac-wired-<chip>[-rev<N>x]-<tag>-ota.bin   (p4 rev1x, s31)
+//   zhac-platform:    zhac-dualchip-<chip>-<tag>-ota.bin          (s3, p4)
+//   zhac-mono-core:   zhac-mono-<chip>-<tag>-ota.bin
 // Only `-ota.bin` files are offered; the full-flash images would overwrite
 // the bootloader and partition table.
+//
+// A name must START with the product prefix of the hub's kind plus its chip
+// token. "Contains -p4- and ends in -ota.bin" is not enough: wired releases
+// also carry zhac-c6-rcp-installer-p4-rev1x-<tag>-ota.bin (releases from
+// v2026092601 on), a one-off P4 app that writes the C6 radio. It passed that
+// loose test, GitHub lists it before the hub firmware, and installing it
+// took the hub off the network until a power cycle rolled it back.
 
 export const RELEASE_REPO = {
     wired:  "zhac-wired-core",
@@ -18,19 +26,22 @@ export const RELEASE_REPO = {
     single: "zhac-mono-core",
 };
 
+const PRODUCT = { wired: "zhac-wired", dual: "zhac-dualchip", single: "zhac-mono" };
+
 // "esp32p4" -> "p4", "esp32s31" -> "s31", "esp32s3" -> "s3".
 export function chipToken(target) {
     const m = /^esp32(.+)$/.exec(String(target || "").toLowerCase());
     return m ? m[1] : "";
 }
 
-// Does this release asset fit the hub that asks? `chip` is the token above;
+// Does this release asset fit the hub that asks? `kind` is wired|dual|single
+// (an unknown kind matches nothing); `chip` is the token above;
 // `revision` is esp_chip_info's major*100+minor (v1.3 -> 130). A `rev1x`
 // image covers v0.x–v1.x silicon (the P4's pre-v3 family); `rev3x` covers v3.x.
 // No rev token in the name means the image does not care.
-export function assetMatches(name, { chip, revision } = {}) {
-    if (!name || !/-ota\.bin$/i.test(name)) return false;
-    if (!chip || !name.toLowerCase().includes(`-${chip}-`)) return false;
+export function assetMatches(name, { kind, chip, revision } = {}) {
+    if (!name || !PRODUCT[kind] || !chip) return false;
+    if (!name.toLowerCase().startsWith(`${PRODUCT[kind]}-${chip}-`) || !/-ota\.bin$/i.test(name)) return false;
     const rev = /-rev(\d)x-/i.exec(name);
     if (!rev || typeof revision !== "number") return true;
     const family = Number(rev[1]);
@@ -75,7 +86,7 @@ export async function fetchReleases(kind, hub, fetchImpl = globalThis.fetch) {
             prerelease: !!rel.prerelease,
             sums:      (rel.assets || []).find(a => a.name === "SHA256SUMS")?.browser_download_url || "",
             assets:    (rel.assets || [])
-                .filter(a => assetMatches(a.name, hub))
+                .filter(a => assetMatches(a.name, { ...hub, kind }))
                 .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size || 0 })),
         }))
         .filter(rel => rel.assets.length > 0);

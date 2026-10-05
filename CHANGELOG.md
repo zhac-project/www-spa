@@ -14,6 +14,8 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Firmware → Install on a P4+C6 wired hub installed the C6 radio installer instead of the hub firmware**: the release picker kept every `-ota.bin` whose name contained the chip token, and each wired release since v2026092601 also carries `zhac-c6-rcp-installer-p4-rev1x-<tag>-ota.bin` (a one-off P4 app that writes the C6 radio), which GitHub lists first and Install took. The hub ran it, dropped off the network and only rolled back after a power cycle. Assets are now matched by exact product prefix and chip (`zhac-wired-p4-…`, `zhac-wired-s31-…`, `zhac-dualchip-…`, `zhac-mono-…`), so the installer can never be offered. S31 hubs were not affected.
+
 - **Device page → Options: saving the report throttle showed no confirmation and threw in the console**: the toast was given the `withToast` success sentinel (a Symbol) as its style, which the toast cannot render. It now gets "ok" / "err".
 
 - **Settings switches sprang back a few seconds after being changed** (Metrics, Auth, Stream logs to MQTT, …): the page never re-read the hub's settings after a change, so the next status push redrew each switch from the old value although the hub had applied the new one. Settings now re-reads status after every change it saves.

@@ -11,6 +11,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { authError, setupSecsLeft, probeAuth,
          submitToken, submitPassword, submitSetup } from "../stores/auth.js";
+import { BrandHero } from "../components/BrandHero.jsx";
 
 // The first-claim window closed (hub powered on > 10 min ago, no password).
 // Nothing to type: the only way forward is a power cycle, then a reload.
@@ -20,7 +21,7 @@ function SetupClosed() {
     return (
         <div class="login-gate">
             <div class="login-card">
-                <span class="brand login-brand">ZHAC</span>
+                <BrandHero />
                 <h2 class="login-title">Set-up window closed</h2>
                 <p class="login-lead">
                     This hub has no admin password yet, but it only lets one be set in the
@@ -78,7 +79,7 @@ export function Login({ setup = false, closed = false }) {
     return (
         <div class="login-gate">
             <form class="login-card" onSubmit={onSubmit}>
-                <span class="brand login-brand">ZHAC</span>
+                <BrandHero />
                 <h2 class="login-title">{setup ? "Set admin password" : "Sign in"}</h2>
                 <p class="login-lead">
                     {setup

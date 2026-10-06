@@ -10,6 +10,7 @@ import { ui, navigate, hrefFor } from "./stores/ui.js";
 import { wireBootstrap } from "./ws/events.js";
 import { ToastHost } from "./components/Toast.jsx";
 import { Spinner } from "./components/Spinner.jsx";
+import { BrandHero } from "./components/BrandHero.jsx";
 import { Login } from "./pages/Login.jsx";
 import { authState, probeAuth } from "./stores/auth.js";
 
@@ -103,7 +104,7 @@ export function App() {
 function Splash({ children }) {
     return (
         <div class="splash">
-            <span class="brand splash-brand">ZHAC</span>
+            <BrandHero />
             <div class="splash-body">{children}</div>
         </div>
     );
@@ -117,7 +118,10 @@ function AppShell() {
     return (
         <>
             <header>
-                <span class="brand">ZHAC</span>
+                <span class="brand">
+                    <img class="brand-mark" src="/zhac-mark.png" alt="" width="28" height="28" />
+                    ZHAC
+                </span>
                 <button class="nav-toggle" aria-label="Menu"
                         onClick={() => setMenuOpen(o => !o)}>☰</button>
                 <nav class={menuOpen ? "open" : ""}>

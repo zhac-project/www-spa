@@ -271,6 +271,9 @@ header {
 }
 
 .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-size: var(--text-lg);
     font-weight: 700;
     letter-spacing: 1.5px;
@@ -1006,11 +1009,19 @@ textarea {
     background: var(--bg);
     color: var(--text);
 }
-.splash-brand, .login-brand {
+/* Brand block (components/BrandHero.jsx): mark above the word on light; on dark
+ * the dark logo, which carries the word, replaces both. Sizes come from the
+ * <img> width/height attributes. */
+.brand-hero { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.brand-hero-word {
     font-size: var(--text-2xl);
     letter-spacing: 1px;
     color: var(--blue);
 }
+.brand-hero-dark { display: none; }
+:root[data-theme="dark"] .brand-hero-mark,
+:root[data-theme="dark"] .brand-hero-word { display: none; }
+:root[data-theme="dark"] .brand-hero-dark { display: block; }
 .splash-body { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 
 .login-card {
@@ -1025,7 +1036,6 @@ textarea {
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-2);
 }
-.login-card .login-brand { text-align: center; }
 .login-title { margin: 0; font-size: var(--text-lg); }
 .login-lead  { margin: 0; color: var(--muted); }
 .login-steps { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 4px; }

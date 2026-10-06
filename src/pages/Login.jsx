@@ -21,7 +21,7 @@ function SetupClosed() {
     return (
         <div class="login-gate">
             <div class="login-card">
-                <BrandHero />
+                <BrandHero darkLogo />
                 <h2 class="login-title">Set-up window closed</h2>
                 <p class="login-lead">
                     This hub has no admin password yet, but it only lets one be set in the
@@ -79,7 +79,7 @@ export function Login({ setup = false, closed = false }) {
     return (
         <div class="login-gate">
             <form class="login-card" onSubmit={onSubmit}>
-                <BrandHero />
+                <BrandHero darkLogo />
                 <h2 class="login-title">{setup ? "Set admin password" : "Sign in"}</h2>
                 <p class="login-lead">
                     {setup

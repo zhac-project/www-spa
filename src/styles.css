@@ -1009,8 +1009,9 @@ textarea {
     background: var(--bg);
     color: var(--text);
 }
-/* Brand block (components/BrandHero.jsx): mark above the word on light; on dark
- * the dark logo, which carries the word, replaces both. Sizes come from the
+/* Brand block (components/BrandHero.jsx): the mark above the word. On the sign-in
+ * card (.brand-hero-swap) the dark theme replaces both with the dark logo, which
+ * carries the word; the splash keeps the mark in both themes. Sizes come from the
  * <img> width/height attributes. */
 .brand-hero { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .brand-hero-word {
@@ -1019,9 +1020,9 @@ textarea {
     color: var(--blue);
 }
 .brand-hero-dark { display: none; }
-:root[data-theme="dark"] .brand-hero-mark,
-:root[data-theme="dark"] .brand-hero-word { display: none; }
-:root[data-theme="dark"] .brand-hero-dark { display: block; }
+:root[data-theme="dark"] .brand-hero-swap .brand-hero-mark,
+:root[data-theme="dark"] .brand-hero-swap .brand-hero-word { display: none; }
+:root[data-theme="dark"] .brand-hero-swap .brand-hero-dark { display: block; }
 .splash-body { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 
 .login-card {

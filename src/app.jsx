@@ -11,6 +11,7 @@ import { wireBootstrap } from "./ws/events.js";
 import { ToastHost } from "./components/Toast.jsx";
 import { Spinner } from "./components/Spinner.jsx";
 import { BrandHero } from "./components/BrandHero.jsx";
+import markUrl from "./assets/brand/zhac-mark.png";
 import { Login } from "./pages/Login.jsx";
 import { authState, probeAuth } from "./stores/auth.js";
 
@@ -119,7 +120,7 @@ function AppShell() {
         <>
             <header>
                 <span class="brand">
-                    <img class="brand-mark" src="/zhac-mark.png" alt="" width="28" height="28" />
+                    <img class="brand-mark" src={markUrl} alt="" width="28" height="28" />
                     ZHAC
                 </span>
                 <button class="nav-toggle" aria-label="Menu"

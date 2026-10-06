@@ -29,9 +29,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     recommended header value.
   -->
   <title>ZHAC</title>
-  <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <!-- Icons live in src/assets/brand/ so Vite hashes the names (the hub caches /assets/* for a
+       year). Keep the file names short: the S3 SPIFFS image allows 31 characters for the whole
+       path, and /assets/<name>-<8 hash>.<ext> leaves 10 for <name>. -->
+  <link rel="icon" href="./src/assets/brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="192x192" href="./src/assets/brand/icon-192.png">
+  <link rel="apple-touch-icon" href="./src/assets/brand/ios-icon.png">
   <script>
     // Apply saved/OS theme BEFORE CSS loads so a dark-mode user doesn't see
     // a light-mode flash. Single source of truth: localStorage "theme" key

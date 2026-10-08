@@ -63,9 +63,24 @@ export function hex16(n) {
     return "0x" + Number(n).toString(16).toUpperCase().padStart(4, "0");
 }
 
-// script.reload's answer as the Scripts page's Apply toast (spec 2026-10-05 §3.10): {loaded, total}, or
-// {queued: true} when the hub was still restarting scripts after 5 s.
+// script.reload's answer as the Scripts page's Apply toast (spec 2026-10-05 §3.10, §5.4): {loaded, total}, or
+// {queued: true} when the hub was still restarting scripts after 5 s. The hub logs why a script failed.
 export function reloadText(r) {
     if (!r || r.queued) return "The hub is still restarting scripts";
-    return `Scripts restarted: ${r.loaded} of ${r.total} started`;
+    const failed = r.total - r.loaded;
+    return `Scripts restarted: ${r.loaded} of ${r.total} started` + (failed > 0 ? `. ${failed} failed: see Log.` : "");
+}
+
+// The toast's kind for the same answer: an error when a script did not start (as ZHAC Cloud shows it),
+// neutral while the hub is still at it, green when every script started.
+export function reloadKind(r) {
+    if (!r || r.queued) return "info";
+    return r.loaded < r.total ? "err" : "ok";
+}
+
+// status.scripts_held (the boot-loop guard): the script loading at the last crash, "" when unknown.
+export function heldText(name) {
+    return "Scripts are not running: the hub restarted twice in a row while they were starting" +
+        (name ? `, the last time while loading "${name}". Fix or delete that script, then press Apply.`
+              : ". Fix or delete the script that crashed it, then press Apply.");
 }

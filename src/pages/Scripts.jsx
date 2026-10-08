@@ -8,7 +8,7 @@ import { useEffect, useState } from "preact/hooks";
 import { scripts, bootstrapScripts, readScript, writeScript,
          deleteScript as delScript, runScript, reloadScripts } from "../stores/scripts.js";
 import { showToast } from "../stores/ui.js";
-import { fmtBytes, reloadText } from "../utils.js";
+import { fmtBytes, reloadText, reloadKind, heldText } from "../utils.js";
 import { status, bootstrapStatus } from "../stores/status.js";
 import { Modal } from "../components/Modal.jsx";
 import { LuaEditor } from "../components/LuaEditor.jsx";
@@ -24,12 +24,13 @@ export function ScriptsPage() {
     // Apply shows only on firmware that reports remote_scripts (spec 2026-10-05 §3.10).
     useEffect(() => { bootstrapStatus().catch(() => {}); }, []);
 
-    // Green only when the restart finished; "still restarting" is the neutral toast.
+    // Green only when every script started; a script that failed is an error; "still restarting" is neutral.
     async function apply() {
         setApplying(true);
         try {
             const r = await reloadScripts();
-            showToast(reloadText(r), (!r || r.queued) ? "info" : "ok");
+            showToast(reloadText(r), reloadKind(r));
+            if (r && !r.queued) bootstrapStatus().catch(() => {});   // a completed pass ends a hold (scripts_held)
         }
         catch (e) { showToast("Apply failed: " + e.message, "err"); }
         finally { setApplying(false); }
@@ -91,6 +92,10 @@ export function ScriptsPage() {
                 )}
                 <button class="primary" style="min-height:44px" onClick={openNew}>+ New Script</button>
             </div>
+
+            {status.value.scripts_held !== undefined && (
+                <div class="card scripts-held" role="alert">{heldText(status.value.scripts_held)}</div>
+            )}
 
             {scripts.value.length === 0 ? (
                 <p class="empty-text">No scripts.</p>

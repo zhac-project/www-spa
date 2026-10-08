@@ -1052,7 +1052,7 @@ textarea {
 .help-links li { margin: 6px 0; }
 
 /* Devices page: the Zigbee radio is down. */
-.card.radio-down { max-width: 720px; margin-bottom: 12px; border-left: 4px solid var(--danger); }
+.card.radio-down, .card.scripts-held { max-width: 720px; margin-bottom: 12px; border-left: 4px solid var(--danger); }
 .card.clock-unset { max-width: 720px; margin-bottom: 12px; border-left: 4px solid var(--warn); }
 
 /* Collapsed "Advanced" blocks (OTA page: install from a URL). */

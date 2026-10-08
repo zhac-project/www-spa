@@ -16,7 +16,12 @@ across the ZHAC platform.
 
 - **Scripts → Apply** (same firmware): restarts the Lua engine (`script.reload`) so handlers use the saved text, and says "Scripts restarted: 3 of 3 started", or "The hub is still restarting scripts" after 5 s.
 
+- **Scripts page: why the scripts are not running**, when the hub held them after restarting twice in a row while they were starting (`status.scripts_held`, the wired firmware's boot-loop guard): which script was loading at the last crash, and that Apply starts them again once it is fixed or deleted.
+
 ### Fixed
+
+- **Apply showed a green toast when a script failed to start**: "Scripts restarted: 2 of 3 started" is now an error toast and says "1 failed: see Log.", as ZHAC Cloud shows it (a tested `reloadKind()` in `utils.js`).
+- **The Lua editor offered "zhac.sleep: timer pool exhausted" as a completion**: the generator now takes only `zhac.<name>` function headings from LUA_API.md (15 entries); a test checks every label.
 
 - **Firmware → Install on a P4+C6 wired hub installed the C6 radio installer instead of the hub firmware**: the release picker kept every `-ota.bin` whose name contained the chip token, and each wired release since v2026092601 also carries `zhac-c6-rcp-installer-p4-rev1x-<tag>-ota.bin` (a one-off P4 app that writes the C6 radio), which GitHub lists first and Install took. The hub ran it, dropped off the network and only rolled back after a power cycle. Assets are now matched by exact product prefix and chip (`zhac-wired-p4-…`, `zhac-wired-s31-…`, `zhac-dualchip-…`, `zhac-mono-…`), so the installer can never be offered. S31 hubs were not affected.
 

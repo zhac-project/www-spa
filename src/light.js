@@ -25,7 +25,7 @@ export function lightChannels(exposes) {
     const writable = (n) => !!by.get(n) && (by.get(n).access & ACCESS_SET) !== 0;
     const range = (n, lo, hi) => {
         const e = by.get(n);
-        const min = Number.isFinite(e?.value_min) ? e.value_min : lo;
+        const min = (Number.isFinite(e?.value_min) && e.value_min > 0) ? e.value_min : lo;
         const max = Number.isFinite(e?.value_max) && e.value_max > min ? e.value_max : hi;
         return { min, max };
     };
@@ -63,8 +63,9 @@ export function cardKeys(channels) {
 
 export function rawKeys(channel, attrs) {
     const own = Object.values(channel.keys).filter(Boolean);
+    const colorKeys = [`color_mode${channel.suffix}`, `color_hex${channel.suffix}`].filter((k) => !own.includes(k));
     const raw = channel.suffix ? [] : RAW_COLOUR;
-    return [...own, ...raw].filter((k) => attrs && k in attrs);
+    return [...own, ...colorKeys, ...raw].filter((k) => attrs && k in attrs);
 }
 
 export function pctFromRaw(raw, max = 254) {

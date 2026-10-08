@@ -93,3 +93,59 @@ test("a pick shows until the hub reports anything new for it, then the report wi
     assert.equal(heldHex(null, "#FF9A00"), "#ff9a00");
     assert.equal(heldHex(null, undefined), null);
 });
+
+test("a read-only expose is never a control: no power write, no colour channel", () => {
+    const ro = (name, type = "numeric") => ({ name, type, access: 1 });
+    const [c] = lightChannels([ro("state", "binary"), { name: "brightness", type: "numeric", access: 3 }, ro("color_hex", "color")]);
+    assert.equal(c.keys.state, null);
+    assert.equal(c.keys.colorHex, null);
+    assert.deepEqual(writesFor(c, { state: 0 }, "brightness", 127), [["brightness", 127]]);
+    assert.deepEqual(lightChannels([ro("state", "binary"), ro("color_hex", "color")]), []);
+    assert.deepEqual(lightChannels([ro("brightness")]), []);
+});
+
+test("writing the power key itself adds no second power write", () => {
+    const [c] = lightChannels(STRIP);
+    assert.deepEqual(writesFor(c, { state: 0 }, "state", true), [["state", true]]);
+    assert.deepEqual(writesFor(c, {}, "state", false), [["state", false]]);
+});
+
+test("every _l1.._l9 gang is a channel, titled by its number", () => {
+    const ex = [];
+    for (let i = 1; i <= 9; i++) ex.push({ name: `brightness_l${i}`, type: "numeric", access: 3 });
+    assert.deepEqual(lightChannels(ex).map((c) => c.title), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `Light ${i}`));
+});
+
+test("state values: numbers, booleans, strings in any case, and junk", () => {
+    for (const v of [true, 1, "ON", "on", "1", "true"]) assert.ok(isOn(v), String(v));
+    for (const v of [false, 0, "OFF", "off", "0", "false", null, undefined, ""]) assert.ok(!isOn(v), String(v));
+});
+
+test("percent round-trips; every clamp holds at both ends", () => {
+    for (let p = 1; p <= 100; p++) assert.equal(pctFromRaw(rawFromPct(p, 0, 254), 254), p);
+    assert.equal(rawFromPct(0), 1);
+    assert.equal(rawFromPct(150), 254);
+    assert.equal(pctFromRaw(300), 100);
+    assert.equal(miredFromKelvin(9000, { min: 153, max: 500 }), 153);
+    assert.equal(miredFromKelvin(1000, { min: 153, max: 500 }), 500);
+});
+
+test("raw keys include read-only color exposes that the card hides", () => {
+    const [c] = lightChannels([
+        { name: "state", type: "binary", access: 3 },
+        { name: "brightness", type: "numeric", access: 3 },
+        { name: "color_hex", type: "color", access: 1 },
+    ]);
+    assert.deepEqual(rawKeys(c, { state: 1, brightness: 127, color_hex: "#ff8a3d" }), ["state", "brightness", "color_hex"]);
+});
+
+test("color_temp with value_min 0 or missing falls back to default minimum", () => {
+    const [c] = lightChannels([
+        { name: "state", type: "binary", access: 3 },
+        { name: "brightness", type: "numeric", access: 3 },
+        { name: "color_temp", type: "numeric", access: 3, value_min: 0, value_max: 500 },
+    ]);
+    assert.deepEqual(c.ct, { min: 150, max: 500 });
+    const kr = kelvinRange(c.ct);
+    assert.ok(Number.isFinite(kr.max), `kelvinRange max should be finite, got ${kr.max}`);
+});

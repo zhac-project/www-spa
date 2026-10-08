@@ -17,6 +17,8 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const RAW_COLOUR = ["color_x", "color_y", "color_xy", "color_hs", "hue", "saturation"];
 
 export const isHex = (v) => typeof v === "string" && HEX.test(v);
+// What a colour pick may send: a colour, never black (the system picker offers it; the hub refuses it).
+export const pickable = (v) => isHex(v) && v.toLowerCase() !== "#000000";
 export const isOn = (v) => v === true || v === 1 || (typeof v === "string" && /^(on|true|1)$/i.test(v));
 export const modeOf = (colorMode) => (colorMode === "color_temp" ? "white" : "colour");
 
@@ -32,15 +34,17 @@ export function lightChannels(exposes) {
     const out = [];
     for (const s of ["", "_l1", "_l2", "_l3", "_l4", "_l5", "_l6", "_l7", "_l8", "_l9"]) {
         const bri = writable(`brightness${s}`), ct = writable(`color_temp${s}`), hex = writable(`color_hex${s}`);
-        if (!bri && !ct && !hex) continue;
+        const st = writable(`state${s}`);
+        // A brightness alone is a light only beside a power switch: a thermostat's display brightness is a setting.
+        if (!(bri && st) && !ct && !hex) continue;
         out.push({
             suffix: s,
             keys: {
-                state: writable(`state${s}`) ? `state${s}` : null,
+                state: st ? `state${s}` : null,
                 brightness: bri ? `brightness${s}` : null,
                 colorTemp: ct ? `color_temp${s}` : null,
                 colorHex: hex ? `color_hex${s}` : null,
-                colorMode: by.has(`color_mode${s}`) ? `color_mode${s}` : null,
+                colorMode: `color_mode${s}`,   // the hub reports it for every colour light; few definitions list the row
             },
             bri: range(`brightness${s}`, 0, 254),
             ct: range(`color_temp${s}`, 150, 500),
@@ -84,6 +88,22 @@ export const miredFromKelvin = (k, ct) => Math.min(ct.max, Math.max(ct.min, Math
 export const kelvinLabel = (k) => `${Math.round(k / 100) * 100} K`;
 export const whiteName = (k) =>
     k < 3300 ? "Warm white" : k < 4500 ? "Neutral white" : k < 5800 ? "Cool white" : "Daylight";
+// A white's tint for the bulb's glow: warm amber, neutral, cool blue (the same as the web's and the app's).
+export function kelvinCss(k) {
+    const t = Math.max(0, Math.min(1, (k - 2000) / 4500));
+    const a = [255, 180, 107], m = [255, 244, 229], c = [214, 230, 255];
+    const mix = (p, q, u) => p.map((v, i) => Math.round(v + (q[i] - v) * u));
+    return `rgb(${(t < 0.5 ? mix(a, m, t * 2) : mix(m, c, (t - 0.5) * 2)).join(",")})`;
+}
+// The bulb's ink on a lit glow (#rrggbb or kelvinCss' rgb()): dark on a light colour, white on a deep one, by WCAG
+// relative luminance; 0.2 is where both read equally (the web's rule). Anything unreadable gets the dark ink.
+export function inkFor(css) {
+    const rgb = isHex(css) ? [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16))
+        : /^rgb\(/.test(css) ? css.match(/\d+/g).map(Number) : null;
+    if (!rgb) return "var(--light-ink)";
+    const [r, g, b] = rgb.map((v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.2 ? "var(--light-ink)" : "var(--light-ink-deep)";
+}
 
 const HUE_NAMES = [[15, "Red"], [45, "Orange"], [70, "Yellow"], [160, "Green"], [200, "Cyan"],
     [255, "Blue"], [290, "Violet"], [350, "Pink"], [361, "Red"]];
@@ -104,6 +124,28 @@ export function writesFor(channel, attrs, key, value) {
     if (sk && key !== sk && !isOn(attrs?.[sk])) out.push([sk, true]);
     out.push([key, value]);
     return out;
+}
+
+// Sends one pick's writes (writesFor) behind the light's switch-on in flight, one per light, as the web and the app
+// do: a pick made before the hub answers the power write waits for that answer instead of sending its own, so picks
+// reach the light behind the power in the order they were made (the last one wins), and a refused switch-on drops
+// every pick waiting on it (each one rejects). Holds one light's gate: `const send = powerGate()`.
+export function powerGate() {
+    let powering = null;
+    return async (writes, stateKey, setAttr) => {
+        for (const [key, value] of writes) {
+            if (key === stateKey && value === true) {
+                if (!powering) {
+                    const p = setAttr(key, true).finally(() => { if (powering === p) powering = null; });
+                    powering = p;
+                }
+                await powering;
+            } else {
+                if (powering) await powering;
+                await setAttr(key, value);
+            }
+        }
+    };
 }
 
 // `pending` = {hex, from}: the pick and the colour reported when it was made.

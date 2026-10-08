@@ -4,12 +4,13 @@
 // colour picker and presets, colour temperature in kelvin, and the raw values.
 // Ranges show their figure on input and send once on change (release); a held arrow
 // key fires a change per repeat, so key-driven commits wait for 250 ms of quiet.
-import { useEffect, useRef, useState } from "preact/hooks";
+// Picks made while a switch-on is in flight wait for it (powerGate).
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { setDeviceAttr } from "../stores/devices.js";
 import { showToast } from "../stores/ui.js";
 import {
-    PRESETS, isHex, isOn, modeOf, rawKeys, pctFromRaw, rawFromPct, kelvinRange, kelvinFromMired,
-    miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex,
+    PRESETS, pickable, isOn, modeOf, rawKeys, pctFromRaw, rawFromPct, kelvinRange, kelvinFromMired,
+    miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex, powerGate, kelvinCss, inkFor,
 } from "../light.js";
 
 const fail = (err) => showToast("Set failed: " + err.message, "err");
@@ -18,7 +19,7 @@ const arrived = (v) => v != null && Number.isFinite(Number(v));
 
 export function LightCard({ ieee, channel, attrs }) {
     const k = channel.keys;
-    const reportedMode = k.colorMode ? attrs[k.colorMode] : undefined;
+    const reportedMode = attrs[k.colorMode];
     const reportedHex = k.colorHex ? attrs[k.colorHex] : undefined;
     const reportedState = k.state ? attrs[k.state] : undefined;
     const reportedBri = k.brightness ? attrs[k.brightness] : undefined;
@@ -66,27 +67,32 @@ export function LightCard({ ieee, channel, attrs }) {
     const tint = showWhite ? (haveK ? whiteName(kelvin) : "") : hex ? colourName(hex) : "";
     const status = on ? ["On", k.brightness ? briText : null, tint || null].filter(Boolean).join(" · ") : "Off";
 
+    const gate = useMemo(powerGate, [ieee]);                 // this light's switch-on in flight
     async function send(key, value) {
         try {
-            for (const [wk, wv] of writesFor(channel, attrs, key, value)) {
-                if (wk === k.state) setPower(true);
-                await setDeviceAttr(ieee, wk, wv);
-            }
+            await gate(writesFor(channel, attrs, key, value), k.state, (wk, wv) => {
+                if (wk === k.state) setPower(wv);
+                return setDeviceAttr(ieee, wk, wv);
+            });
             return true;
         } catch (err) { setPower(null); fail(err); return false; }
     }
-    async function togglePower(e) {
+    function togglePower(e) {
         const next = e.currentTarget.checked;
         setPower(next);
-        try { await setDeviceAttr(ieee, k.state, next); }
-        catch (err) { setPower(null); fail(err); }
+        send(k.state, next);
     }
-    async function pickHex(value) {
+    // False when refused: black is no colour, so nothing is sent (power included).
+    function pickHex(value) {
         const h = String(value).toLowerCase();
-        if (!isHex(h)) return;
+        if (!pickable(h)) {
+            if (h === "#000000") showToast("Black is not a colour: switch the light off instead", "err");
+            return false;
+        }
         setPending({ hex: h, from: reportedHex });
         setMode("colour");
-        if (!(await send(k.colorHex, h))) setPending(null);
+        send(k.colorHex, h).then((ok) => { if (!ok) setPending(null); });
+        return true;
     }
     function commitBri(e) {
         const p = Number(e.currentTarget.value);
@@ -105,13 +111,13 @@ export function LightCard({ ieee, channel, attrs }) {
     }
 
     const raw = rawKeys(channel, attrs);
-    const lit = on && (showWhite || !!hex);                   // a colour or warm white glows: dark ink on it (.light-icon.lit)
-    const glow = lit ? (showWhite ? "var(--light-warm)" : hex) : "var(--surface-soft)";
+    const lit = on && (showWhite || !!hex);                   // a colour, or a white tinted by its kelvin, glows
+    const glow = lit ? (showWhite ? kelvinCss(kelvin) : hex) : "var(--surface-soft)";
     return (
         <section class="light-card" aria-label={channel.title}
                  onKeyDown={() => { keyed.current = true; }} onPointerDown={() => { keyed.current = false; }}>
             <div class="light-head">
-                <span class={lit ? "light-icon lit" : "light-icon"} aria-hidden="true" style={`background:${glow};box-shadow:${on ? `0 0 18px 2px ${glow}` : "none"}`}>
+                <span class="light-icon" aria-hidden="true" style={`background:${glow};box-shadow:${on ? `0 0 18px 2px ${glow}` : "none"}${lit ? `;color:${inkFor(glow)}` : ""}`}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6" /><path d="M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" /></svg>
                 </span>
                 <div class="light-title">
@@ -150,7 +156,8 @@ export function LightCard({ ieee, channel, attrs }) {
                 <div class="light-colour">
                     <div class="light-pick">
                         <label class="light-picker">
-                            <input type="color" value={hex ?? "#ffffff"} onChange={(e) => pickHex(e.currentTarget.value)}
+                            <input type="color" value={hex ?? "#ffffff"}
+                                   onChange={(e) => { if (!pickHex(e.currentTarget.value)) e.currentTarget.value = hex ?? "#ffffff"; }}
                                    aria-label={`Pick a colour, ${channel.title}`} />
                             <span>Pick a colour</span>
                         </label>

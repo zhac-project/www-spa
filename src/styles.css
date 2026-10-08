@@ -35,8 +35,8 @@
     --surface-hover:  #e9ecef;       /* button:hover */
     --surface-sunken: #eef0f2;       /* dev-tabs strip */
     --surface-soft:   #e9ecef;       /* table th, dev-bottom-bar */
-    --light-warm:     #ffcb98;       /* light card: glow of a light in white mode */
-    --light-ink:      #1d2530;       /* light card: bulb glyph on a lit glow; bright in both themes, so not re-tuned in dark */
+    --light-ink:      #1d2530;       /* light card: bulb glyph on a light glow (the light's own colour, so not re-tuned in dark) */
+    --light-ink-deep: #ffffff;       /* light card: bulb glyph on a deep glow (e.g. pure blue); not re-tuned in dark */
     --surface-input:  #ffffff;       /* form inputs, textarea */
     --gutter-bg:      #e9ecef;       /* .code-editor-gutter */
     --secondary-btn-bg: #e9ecef;     /* button.secondary */
@@ -175,7 +175,6 @@
     --surface-hover:  #2a3340;
     --surface-sunken: #141a22;
     --surface-soft:   #1a212b;
-    --light-warm:     #ffcb98;
     --surface-input:  #141a22;
     --gutter-bg:      #1a212b;
     --secondary-btn-bg: #2a3340;
@@ -890,7 +889,6 @@ textarea {
     width: 44px; height: 44px; flex: none; box-sizing: border-box; border-radius: 50%;
     border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text);
 }
-.light-icon.lit { color: var(--light-ink); }
 .light-title { flex: 1 1 auto; min-width: 0; }
 .light-title h4 { margin: 0; font-size: var(--text-base); }
 .light-status { margin-top: 2px; font-size: var(--text-sm); color: var(--muted); }

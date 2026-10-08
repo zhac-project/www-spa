@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
     PRESETS, isHex, isOn, modeOf, lightChannels, cardKeys, rawKeys, pctFromRaw, rawFromPct,
     kelvinRange, kelvinFromMired, miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex,
+    pickable, powerGate, kelvinCss, inkFor,
 } from "../src/light.js";
 
 const STRIP = [
@@ -23,6 +24,28 @@ test("a colour strip is one channel with every light key", () => {
         colorHex: "color_hex", colorMode: "color_mode" });
     assert.deepEqual(c.ct, { min: 153, max: 500 });
     assert.deepEqual(c.bri, { min: 0, max: 254 });
+});
+
+test("the mode is read from color_mode even when no row lists it (most colour bulbs list none)", () => {
+    const [c] = lightChannels(STRIP.filter((e) => e.name !== "color_mode"));
+    assert.equal(c.keys.colorMode, "color_mode");
+    const [l2] = lightChannels([{ name: "state_l2", type: "binary", access: 3 }, { name: "color_hex_l2", type: "color", access: 3 }]);
+    assert.equal(l2.keys.colorMode, "color_mode_l2");
+});
+
+test("a brightness with no power to switch is a setting, not a light (thermostat displays)", () => {
+    // Lytko L101Z: display brightness 0-100 %; Tuya _TZE204_tagezcph: backlight 0-8. Neither has a writable state.
+    const thermostat = [
+        { name: "brightness", type: "numeric", access: 3, value_min: 0, value_max: 8 },
+        { name: "local_temperature", type: "numeric", access: 1 },
+        { name: "system_mode", type: "enum", access: 3 },
+    ];
+    assert.deepEqual(lightChannels(thermostat), []);
+    assert.deepEqual(lightChannels([{ name: "state", type: "binary", access: 1 }, ...thermostat]), []);
+    // with a power switch it is a dimmer; a colour or a white alone still makes a light
+    assert.equal(lightChannels([{ name: "state", type: "binary", access: 3 }, ...thermostat]).length, 1);
+    assert.equal(lightChannels([{ name: "color_temp", type: "numeric", access: 3 }]).length, 1);
+    assert.equal(lightChannels([{ name: "color_hex", type: "color", access: 3 }]).length, 1);
 });
 
 test("a two-gang dimmer is two channels; a plain switch is none", () => {
@@ -67,6 +90,26 @@ test("kelvin and mired, warm on the left", () => {
     assert.deepEqual([2700, 4000, 5000, 6500].map(whiteName), ["Warm white", "Neutral white", "Cool white", "Daylight"]);
 });
 
+test("a white glows with its own tint, warm amber to cool blue (the web's and the app's kelvinCss)", () => {
+    assert.equal(kelvinCss(2000), "rgb(255,180,107)");
+    assert.equal(kelvinCss(4250), "rgb(255,244,229)");
+    assert.equal(kelvinCss(6500), "rgb(214,230,255)");
+    assert.equal(kelvinCss(1500), kelvinCss(2000));
+    assert.equal(kelvinCss(9000), kelvinCss(6500));
+    assert.notEqual(kelvinCss(2700), kelvinCss(6500));
+});
+
+test("the bulb's ink is dark on a light colour and white on a deep one (WCAG luminance, crossover 0.2)", () => {
+    const DARK = "var(--light-ink)", LIGHT = "var(--light-ink-deep)";
+    assert.equal(inkFor("#0000ff"), LIGHT);                  // pure blue: about 2:1 with dark ink
+    assert.equal(inkFor("#ff0000"), DARK);
+    assert.equal(inkFor("#ffd60a"), DARK);
+    assert.equal(inkFor("#7a7a7a"), LIGHT);                  // luminance 0.195
+    assert.equal(inkFor("#7c7c7c"), DARK);                   // 0.201
+    for (const k of [2000, 2700, 4000, 6500]) assert.equal(inkFor(kelvinCss(k)), DARK, `${k} K`);
+    assert.equal(inkFor("var(--surface-soft)"), DARK);       // not a colour it can read
+});
+
 test("colour names and presets", () => {
     assert.deepEqual(PRESETS.map((p) => colourName(p.hex)), PRESETS.map((p) => p.name));
     assert.equal(colourName("#ffffff"), "White");
@@ -96,12 +139,78 @@ test("a pick shows until the hub reports anything new for it, then the report wi
 
 test("a read-only expose is never a control: no power write, no colour channel", () => {
     const ro = (name, type = "numeric") => ({ name, type, access: 1 });
-    const [c] = lightChannels([ro("state", "binary"), { name: "brightness", type: "numeric", access: 3 }, ro("color_hex", "color")]);
+    const [c] = lightChannels([ro("state", "binary"), { name: "brightness", type: "numeric", access: 3 },
+        { name: "color_temp", type: "numeric", access: 3 }, ro("color_hex", "color")]);
     assert.equal(c.keys.state, null);
     assert.equal(c.keys.colorHex, null);
     assert.deepEqual(writesFor(c, { state: 0 }, "brightness", 127), [["brightness", 127]]);
     assert.deepEqual(lightChannels([ro("state", "binary"), ro("color_hex", "color")]), []);
     assert.deepEqual(lightChannels([ro("brightness")]), []);
+});
+
+test("black is no colour: the picker's black is refused before anything is sent, power included", () => {
+    assert.ok(!pickable("#000000") && !pickable("#000000".toUpperCase()));
+    assert.ok(pickable("#010000") && pickable("#FF9500") && PRESETS.every((p) => pickable(p.hex)));
+    assert.ok(!pickable("orange") && !pickable("#00000") && !pickable(undefined));
+});
+
+// The transport, with the power write held until the test answers it.
+function heldPower() {
+    const wire = [], answers = [];
+    const setAttr = (key, value) => {
+        wire.push([key, value]);
+        return key === "state" ? new Promise((res, rej) => answers.push({ res, rej })) : Promise.resolve();
+    };
+    return { wire, setAttr, answer: () => answers.shift() };
+}
+const settled = () => new Promise((r) => setTimeout(r, 0));
+
+test("picks made while the switch-on is in flight wait for it and go out in order, the last one last", { timeout: 2000 }, async () => {
+    const [c] = lightChannels(STRIP);
+    const off = { state: 0 }, on = { state: 1 };
+    const { wire, setAttr, answer } = heldPower();
+    const send = powerGate();
+    const picks = [
+        send(writesFor(c, off, "color_hex", "#ff9500"), "state", setAttr),
+        send(writesFor(c, off, "color_hex", "#0a84ff"), "state", setAttr),
+        send(writesFor(c, on, "brightness", 203), "state", setAttr),   // the hub's own "on" came before its answer
+    ];
+    await settled();
+    assert.deepEqual(wire, [["state", true]]);                         // one switch-on, nothing ahead of it
+    answer().res();
+    await Promise.all(picks);
+    assert.deepEqual(wire, [["state", true], ["color_hex", "#ff9500"], ["color_hex", "#0a84ff"], ["brightness", 203]]);
+    // once it is answered a pick goes straight out; a tap on the power switch is a switch-on too
+    await send(writesFor(c, on, "color_hex", "#ff2d55"), "state", setAttr);
+    assert.deepEqual(wire.at(-1), ["color_hex", "#ff2d55"]);
+    wire.length = 0;
+    const tap = send(writesFor(c, off, "state", true), "state", setAttr);
+    const after = send(writesFor(c, off, "color_temp", 250), "state", setAttr);
+    await settled();
+    assert.deepEqual(wire, [["state", true]]);
+    answer().res();
+    await Promise.all([tap, after]);
+    assert.deepEqual(wire, [["state", true], ["color_temp", 250]]);
+});
+
+test("a refused switch-on drops every pick waiting on it, and the next pick asks again", { timeout: 2000 }, async () => {
+    const [c] = lightChannels(STRIP);
+    const off = { state: 0 };
+    const { wire, setAttr, answer } = heldPower();
+    const send = powerGate();
+    const a = send(writesFor(c, off, "color_hex", "#ff9500"), "state", setAttr);
+    const b = send(writesFor(c, off, "brightness", 127), "state", setAttr);
+    await settled();
+    answer().rej(new Error("radio refused"));
+    await assert.rejects(a, /radio refused/);
+    await assert.rejects(b, /radio refused/);
+    assert.deepEqual(wire, [["state", true]]);
+    const again = send(writesFor(c, off, "color_hex", "#0a84ff"), "state", setAttr);
+    await settled();
+    assert.deepEqual(wire, [["state", true], ["state", true]]);
+    answer().res();
+    await again;
+    assert.deepEqual(wire.at(-1), ["color_hex", "#0a84ff"]);
 });
 
 test("writing the power key itself adds no second power write", () => {
@@ -112,7 +221,7 @@ test("writing the power key itself adds no second power write", () => {
 
 test("every _l1.._l9 gang is a channel, titled by its number", () => {
     const ex = [];
-    for (let i = 1; i <= 9; i++) ex.push({ name: `brightness_l${i}`, type: "numeric", access: 3 });
+    for (let i = 1; i <= 9; i++) ex.push({ name: `state_l${i}`, type: "binary", access: 3 }, { name: `brightness_l${i}`, type: "numeric", access: 3 });
     assert.deepEqual(lightChannels(ex).map((c) => c.title), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `Light ${i}`));
 });
 

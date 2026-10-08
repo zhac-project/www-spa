@@ -13,9 +13,11 @@ import { devices as devicesStore } from "../stores/devices.js";
 import { uplinkGet, deviceRainmakerList, deviceRainmakerAdd, deviceRainmakerRemove } from "../stores/rainmaker.js";
 import { fmtSince, hex16 } from "../utils.js";
 import { Spinner } from "../components/Spinner.jsx";
+import { LightCard } from "../components/LightCard.jsx";
 import { call } from "../ws/client.js";
 import { SCHEDULE_DAYS, WEEKDAYS, TEMP_MIN, TEMP_MAX, TEMP_STEP,
          parseDay, formatDay, validateDay } from "../schedule.js";
+import { lightChannels, cardKeys } from "../light.js";
 
 const TABS = [
     { id: "info",     label: "Info"     },
@@ -273,18 +275,23 @@ function StatesTab({ d, ieee }) {
     // seven raw text rows -- shown even before the thermostat has reported
     // them, so a schedule can be set on a valve that has not been queried yet.
     const scheduleDays = SCHEDULE_DAYS.map(s => s.key).filter(k => isWritable(exposeMap[k]));
+    // Lights get the light card; its keys (and the raw colour channels) leave the table.
+    const channels = lightChannels(d.exposes);
+    const lightKeys = cardKeys(channels);
     // Settings the device has not reported yet (a Tuya MCU often sends them
     // only at power-up) still get a row, so they can be set: writable
     // state+set exposes. Write-only ones live on the Commands tab.
     const unreported = Object.values(exposeMap)
         .filter(e => (e.access & ACCESS_SET) && (e.access & ACCESS_STATE) && !(e.name in attrs))
-        .map(e => e.name);
-    const keys = [...Object.keys(attrs), ...unreported].filter(k => !scheduleDays.includes(k)).sort();
-    if (!keys.length && !scheduleDays.length) {
+        .map(e => e.name)
+        .filter(k => !lightKeys.has(k));
+    const keys = [...Object.keys(attrs), ...unreported].filter(k => !scheduleDays.includes(k) && !lightKeys.has(k)).sort();
+    if (!keys.length && !scheduleDays.length && !channels.length) {
         return <div class="tab-panel"><p class="empty-text">No attributes reported yet.</p></div>;
     }
     return (
         <div class="tab-panel">
+            {channels.map(c => <LightCard key={c.suffix || "base"} ieee={ieee} channel={c} attrs={attrs} />)}
             {scheduleDays.length > 0 && <ScheduleCard ieee={ieee} attrs={attrs} days={scheduleDays} />}
             {keys.length > 0 && (
                 <table class="data-table dev-states">

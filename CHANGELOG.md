@@ -10,6 +10,7 @@ across the ZHAC platform.
 
 ### Added
 
+- **Light card.** A dimmable or colour light's States tab opens with a card: power, brightness in %, Colour/White, a colour picker with eight presets, colour temperature in kelvin (warm left), and the raw values folded away. Picking a brightness, colour or white while the light is off switches it on first; sliders send once, on release.
 - **"Restart hub" button** (Settings → Misc, wired hub only, gated on the firmware reporting `restart: true` in `/api/status`/`status.get` so older firmware just doesn't show it): confirms ("Restart the hub now? Devices stay paired…"), sends WS `system.restart`, then shows "Restarting…" until the WebSocket actually drops and reconnects (not just until the command replies), then "Hub is back" for a few seconds. Reuses the existing auto-reconnect in `src/ws/client.js` and the header's connected flag — no new polling loop.
 
 ### Fixed

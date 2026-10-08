@@ -54,7 +54,9 @@ export function LightCard({ ieee, channel, attrs }) {
     const haveBri = bri != null || arrived(reportedBri);      // else the figure is "—", not 1 %
     const briText = haveBri ? `${pct} %` : "—";
     const hex = heldHex(pending, reportedHex);
-    const kr = kelvinRange(channel.ct);                       // the rail steps 100 K, the label's unit: no label jump after a report, no repeated mired
+    // The kelvin rail steps 100 K, the label's unit (no label jump after a report, no repeated mired). Its ends round out to
+    // whole hundreds so the grid reaches both ends of the light's range; miredFromKelvin clamps the overshoot to it.
+    const kr = kelvinRange(channel.ct);
     const reportedK = kelvinFromMired(reportedCt);
     const kelvin = kel ?? (reportedK ?? kr.min);
     const haveK = kel != null || reportedK != null;           // else "—"; the slider still rests at kr.min
@@ -168,7 +170,7 @@ export function LightCard({ ieee, channel, attrs }) {
                 <div class="light-row">
                     <div class="light-row-head"><label for={`lc-ct-${ieee}${channel.suffix}`}>Colour temperature</label><b>{haveK ? `${kelvinLabel(kelvin)} · ${whiteName(kelvin)}` : "—"}</b></div>
                     <input id={`lc-ct-${ieee}${channel.suffix}`} class="light-range light-range-ct" type="range"
-                           min={kr.min} max={kr.max} step="100" value={kelvin}
+                           min={Math.floor(kr.min / 100) * 100} max={Math.ceil(kr.max / 100) * 100} step="100" value={kelvin}
                            aria-valuetext={haveK ? `${kelvinLabel(kelvin)}, ${whiteName(kelvin)}` : "Not reported"}
                            onInput={(e) => setKel(Number(e.currentTarget.value))} onChange={commitKelvin} />
                     <div class="light-ends"><span>Warm</span><span>Cool</span></div>

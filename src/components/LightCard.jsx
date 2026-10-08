@@ -10,7 +10,7 @@ import { setDeviceAttr } from "../stores/devices.js";
 import { showToast } from "../stores/ui.js";
 import {
     PRESETS, pickable, isOn, modeOf, rawKeys, pctFromRaw, rawFromPct, kelvinRange, kelvinFromMired,
-    miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex, powerGate, kelvinCss, inkFor,
+    miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex, powerGate, kelvinCss, inkFor, sameColour,
 } from "../light.js";
 
 const fail = (err) => showToast("Set failed: " + err.message, "err");
@@ -70,12 +70,16 @@ export function LightCard({ ieee, channel, attrs }) {
     const gate = useMemo(powerGate, [ieee]);                 // this light's switch-on in flight
     async function send(key, value) {
         try {
-            await gate(writesFor(channel, attrs, key, value), k.state, (wk, wv) => {
+            // Power as the card shows it, so a pick made after an Off tap asks for its own switch-on.
+            await gate(writesFor(channel, { ...attrs, [k.state]: on }, key, value), k.state, (wk, wv) => {
                 if (wk === k.state) setPower(wv);
                 return setDeviceAttr(ieee, wk, wv);
             });
             return true;
-        } catch (err) { setPower(null); fail(err); return false; }
+        } catch (err) {
+            if (!err?.dropped) { setPower(null); fail(err); }   // dropped: an Off came after it, and the Off stands
+            return false;
+        }
     }
     function togglePower(e) {
         const next = e.currentTarget.checked;
@@ -166,7 +170,7 @@ export function LightCard({ ieee, channel, attrs }) {
                     <div class="light-presets" role="group" aria-label="Colour presets">
                         {PRESETS.map((p) => (
                             <button key={p.hex} type="button" class="light-preset" style={`background:${p.hex}`}
-                                    aria-label={p.name} title={p.name} aria-pressed={hex === p.hex}
+                                    aria-label={p.name} title={p.name} aria-pressed={sameColour(hex, p.hex)}
                                     onClick={() => pickHex(p.hex)} />
                         ))}
                     </div>

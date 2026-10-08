@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
     PRESETS, isHex, isOn, modeOf, lightChannels, cardKeys, rawKeys, pctFromRaw, rawFromPct,
     kelvinRange, kelvinFromMired, miredFromKelvin, kelvinLabel, whiteName, colourName, writesFor, heldHex,
-    pickable, powerGate, kelvinCss, inkFor,
+    pickable, powerGate, kelvinCss, inkFor, sameColour,
 } from "../src/light.js";
 
 const STRIP = [
@@ -110,6 +110,18 @@ test("the bulb's ink is dark on a light colour and white on a deep one (WCAG lum
     assert.equal(inkFor("var(--surface-soft)"), DARK);       // not a colour it can read
 });
 
+test("a preset is the colour shown at any brightness: its ring follows the hub's full-brightness twin", () => {
+    // what the hub mirrors (and the light reports) for a preset pick: the colour at full brightness
+    const twins = { "#34c759": "#45ff74", "#32ade6": "#39c0ff", "#af52de": "#c95fff" };
+    for (const p of PRESETS) {
+        const shown = twins[p.hex] ?? p.hex;
+        assert.deepEqual(PRESETS.filter((q) => sameColour(shown, q.hex)).map((q) => q.name), [p.name], p.name);
+    }
+    assert.ok(sameColour("#400000", "#ff0000") && sameColour("#FF0000", "#ff0000"));
+    assert.ok(!sameColour("#ff8a3d", "#ff9500") && !sameColour("#ffffff", "#ff3b30"));
+    assert.ok(!sameColour(null, "#ff3b30") && !sameColour("#ff3b30", undefined));
+});
+
 test("colour names and presets", () => {
     assert.deepEqual(PRESETS.map((p) => colourName(p.hex)), PRESETS.map((p) => p.name));
     assert.equal(colourName("#ffffff"), "White");
@@ -211,6 +223,49 @@ test("a refused switch-on drops every pick waiting on it, and the next pick asks
     answer().res();
     await again;
     assert.deepEqual(wire.at(-1), ["color_hex", "#0a84ff"]);
+});
+
+const isDropped = (err) => err?.dropped === true;
+
+test("an Off goes out at once, drops the picks held behind the switch-on, and a later pick asks for its own", { timeout: 2000 }, async () => {
+    const [c] = lightChannels(STRIP);
+    const off = { state: 0 };
+    const { wire, setAttr, answer } = heldPower();
+    const send = powerGate();
+    const a = send(writesFor(c, off, "color_hex", "#ff9500"), "state", setAttr);   // switch-on in flight
+    await settled();
+    const tap = send(writesFor(c, off, "state", false), "state", setAttr);          // Off: not held behind it
+    await settled();
+    const b = send(writesFor(c, off, "color_hex", "#0a84ff"), "state", setAttr);    // after the Off
+    await settled();
+    assert.deepEqual(wire, [["state", true], ["state", false], ["state", true]]);
+    const [first, offAnswer, second] = [answer(), answer(), answer()];
+    first.res();                                                                     // A is never sent
+    await assert.rejects(a, isDropped);
+    offAnswer.res();
+    await tap;
+    second.res();
+    await b;
+    assert.deepEqual(wire, [["state", true], ["state", false], ["state", true], ["color_hex", "#0a84ff"]]);
+});
+
+test("a switch-on refused or timed out after an Off is no failure: what it held is dropped, the Off stands", { timeout: 2000 }, async () => {
+    const [c] = lightChannels(STRIP);
+    const off = { state: 0 }, on = { state: 1 };
+    const { wire, setAttr, answer } = heldPower();
+    const send = powerGate();
+    const powerTap = send(writesFor(c, off, "state", true), "state", setAttr);
+    const pick = send(writesFor(c, on, "brightness", 203), "state", setAttr);
+    await settled();
+    const offTap = send(writesFor(c, on, "state", false), "state", setAttr);
+    await settled();
+    const [onAnswer, offAnswer] = [answer(), answer()];
+    onAnswer.rej(new Error("timeout"));
+    await assert.rejects(powerTap, isDropped);
+    await assert.rejects(pick, isDropped);
+    offAnswer.res();
+    await offTap;
+    assert.deepEqual(wire, [["state", true], ["state", false]]);
 });
 
 test("writing the power key itself adds no second power write", () => {

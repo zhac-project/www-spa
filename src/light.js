@@ -107,15 +107,28 @@ export function inkFor(css) {
 
 const HUE_NAMES = [[15, "Red"], [45, "Orange"], [70, "Yellow"], [160, "Green"], [200, "Cyan"],
     [255, "Blue"], [290, "Violet"], [350, "Pink"], [361, "Red"]];
-export function colourName(hex) {
-    if (!isHex(hex)) return "";
+// Hue in degrees [0, 360) and saturation 0..1 of a "#rrggbb" (HSV, the value dropped).
+function hueSat(hex) {
     const n = parseInt(hex.slice(1), 16);
     const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
     const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
-    if (mx === 0 || d / mx < 0.12) return "White";
-    let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h = (h * 60 + 360) % 360;
+    if (d === 0) return { h: 0, s: 0 };
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: d / mx };
+}
+export function colourName(hex) {
+    if (!isHex(hex)) return "";
+    const { h, s } = hueSat(hex);
+    if (s < 0.12) return "White";
     return HUE_NAMES.find(([lim]) => h < lim)[1];
+}
+// One colour at any brightness: the hub shows a pick as the light reports it, at full brightness (the Green preset
+// #34c759 as #45ff74), so a preset is the colour shown when hue and saturation agree within a hair (the presets lie
+// 11 degrees or more apart).
+export function sameColour(a, b) {
+    if (!isHex(a) || !isHex(b)) return false;
+    const x = hueSat(a), y = hueSat(b), dh = Math.abs(x.h - y.h);
+    return Math.min(dh, 360 - dh) <= 2 && Math.abs(x.s - y.s) <= 0.02;
 }
 
 export function writesFor(channel, attrs, key, value) {
@@ -129,21 +142,32 @@ export function writesFor(channel, attrs, key, value) {
 // Sends one pick's writes (writesFor) behind the light's switch-on in flight, one per light, as the web and the app
 // do: a pick made before the hub answers the power write waits for that answer instead of sending its own, so picks
 // reach the light behind the power in the order they were made (the last one wins), and a refused switch-on drops
-// every pick waiting on it (each one rejects). Holds one light's gate: `const send = powerGate()`.
+// every pick waiting on it (each one rejects). An Off goes out at once and ends that switch-on: what was waiting
+// behind it is never sent (it rejects with `dropped`, no failure to report, whether the switch-on is answered or
+// refused; a colour after an Off could light the lamp again), and a later pick asks for its own switch-on.
+// Holds one light's gate: `const send = powerGate()`.
 export function powerGate() {
-    let powering = null;
+    let powering = null, offs = 0;
+    const dropped = () => Object.assign(new Error("The light was switched off."), { dropped: true });
     return async (writes, stateKey, setAttr) => {
+        const seen = offs;
         for (const [key, value] of writes) {
-            if (key === stateKey && value === true) {
-                if (!powering) {
-                    const p = setAttr(key, true).finally(() => { if (powering === p) powering = null; });
-                    powering = p;
-                }
-                await powering;
-            } else {
-                if (powering) await powering;
-                await setAttr(key, value);
+            if (key === stateKey && value === false) {
+                offs += 1;
+                powering = null;
+                await setAttr(key, false);
+                continue;
             }
+            const power = key === stateKey && value === true;
+            if (power && !powering) {
+                const p = setAttr(key, true).finally(() => { if (powering === p) powering = null; });
+                powering = p;
+            }
+            if (powering) {
+                try { await powering; } catch (err) { throw offs === seen ? err : dropped(); }
+            }
+            if (offs !== seen) throw dropped();
+            if (!power) await setAttr(key, value);
         }
     };
 }

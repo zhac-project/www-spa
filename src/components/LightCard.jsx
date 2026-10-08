@@ -43,7 +43,7 @@ export function LightCard({ ieee, channel, attrs }) {
     const haveBri = bri != null || arrived(reportedBri);      // else the figure is "—", not 1 %
     const briText = haveBri ? `${pct} %` : "—";
     const hex = heldHex(pending, reportedHex);
-    const kr = kelvinRange(channel.ct);
+    const kr = kelvinRange(channel.ct);                       // the rail steps 50 K: each key press is a new mired value
     const reportedK = kelvinFromMired(reportedCt);
     const kelvin = kel ?? (reportedK ?? kr.min);
     const haveK = kel != null || reportedK != null;           // else "—"; the slider still rests at kr.min
@@ -60,7 +60,7 @@ export function LightCard({ ieee, channel, attrs }) {
                 await setDeviceAttr(ieee, wk, wv);
             }
             return true;
-        } catch (err) { fail(err); return false; }
+        } catch (err) { setPower(null); fail(err); return false; }
     }
     async function togglePower(e) {
         const next = e.currentTarget.checked;
@@ -88,11 +88,12 @@ export function LightCard({ ieee, channel, attrs }) {
     }
 
     const raw = rawKeys(channel, attrs);
-    const glow = on ? (showWhite ? "var(--light-warm)" : hex || "var(--surface-soft)") : "var(--surface-soft)";
+    const lit = on && (showWhite || !!hex);                   // a colour or warm white glows: dark ink on it (.light-icon.lit)
+    const glow = lit ? (showWhite ? "var(--light-warm)" : hex) : "var(--surface-soft)";
     return (
         <section class="light-card" aria-label={channel.title}>
             <div class="light-head">
-                <span class="light-icon" aria-hidden="true" style={`background:${glow};box-shadow:${on ? `0 0 18px 2px ${glow}` : "none"}`}>
+                <span class={lit ? "light-icon lit" : "light-icon"} aria-hidden="true" style={`background:${glow};box-shadow:${on ? `0 0 18px 2px ${glow}` : "none"}`}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6" /><path d="M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" /></svg>
                 </span>
                 <div class="light-title">
@@ -151,7 +152,7 @@ export function LightCard({ ieee, channel, attrs }) {
                 <div class="light-row">
                     <div class="light-row-head"><label for={`lc-ct-${ieee}${channel.suffix}`}>Colour temperature</label><b>{haveK ? `${kelvinLabel(kelvin)} · ${whiteName(kelvin)}` : "—"}</b></div>
                     <input id={`lc-ct-${ieee}${channel.suffix}`} class="light-range light-range-ct" type="range"
-                           min={kr.min} max={kr.max} step="1" value={kelvin}
+                           min={kr.min} max={kr.max} step="50" value={kelvin}
                            aria-valuetext={haveK ? `${kelvinLabel(kelvin)}, ${whiteName(kelvin)}` : "Not reported"}
                            onInput={(e) => setKel(Number(e.currentTarget.value))} onChange={commitKelvin} />
                     <div class="light-ends"><span>Warm</span><span>Cool</span></div>

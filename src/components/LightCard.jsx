@@ -43,7 +43,7 @@ export function LightCard({ ieee, channel, attrs }) {
     const haveBri = bri != null || arrived(reportedBri);      // else the figure is "—", not 1 %
     const briText = haveBri ? `${pct} %` : "—";
     const hex = heldHex(pending, reportedHex);
-    const kr = kelvinRange(channel.ct);                       // the rail steps 50 K: each key press is a new mired value
+    const kr = kelvinRange(channel.ct);                       // the rail steps 100 K, the label's unit: no label jump after a report, no repeated mired
     const reportedK = kelvinFromMired(reportedCt);
     const kelvin = kel ?? (reportedK ?? kr.min);
     const haveK = kel != null || reportedK != null;           // else "—"; the slider still rests at kr.min
@@ -152,7 +152,7 @@ export function LightCard({ ieee, channel, attrs }) {
                 <div class="light-row">
                     <div class="light-row-head"><label for={`lc-ct-${ieee}${channel.suffix}`}>Colour temperature</label><b>{haveK ? `${kelvinLabel(kelvin)} · ${whiteName(kelvin)}` : "—"}</b></div>
                     <input id={`lc-ct-${ieee}${channel.suffix}`} class="light-range light-range-ct" type="range"
-                           min={kr.min} max={kr.max} step="50" value={kelvin}
+                           min={kr.min} max={kr.max} step="100" value={kelvin}
                            aria-valuetext={haveK ? `${kelvinLabel(kelvin)}, ${whiteName(kelvin)}` : "Not reported"}
                            onInput={(e) => setKel(Number(e.currentTarget.value))} onChange={commitKelvin} />
                     <div class="light-ends"><span>Warm</span><span>Cool</span></div>

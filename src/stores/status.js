@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { signal } from "@preact/signals";
 import { call, on } from "../ws/client.js";
+import { mergeTick } from "../utils.js";
 
 // Whole-system status snapshot. Shape matches what `api_status_get`
 // produces today (see /api/status in rest_ops.cpp).
@@ -51,6 +52,6 @@ export function chipName(s = status.value) {
 
 on("status.tick", (s) => {
     // status.tick is a periodic delta — merge so fields the server
-    // omits stay as their last-known value.
-    if (s) status.value = { ...status.value, ...s };
+    // omits stay as their last-known value (scripts_held aside: mergeTick).
+    if (s) status.value = mergeTick(status.value, s);
 });

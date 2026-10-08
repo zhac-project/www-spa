@@ -78,6 +78,15 @@ export function reloadKind(r) {
     return r.loaded < r.total ? "err" : "ok";
 }
 
+// status.tick into the last status: a field the tick leaves out keeps its value, except scripts_held. The firmware
+// puts that in every tick while the hub holds its scripts, so a tick without it means the hold ended (a cloud
+// Apply ends it without telling the page anything else).
+export function mergeTick(prev, tick) {
+    const next = { ...prev, ...tick };
+    if (!("scripts_held" in tick)) delete next.scripts_held;
+    return next;
+}
+
 // status.scripts_held (the boot-loop guard): the script loading at the last crash, "" when unknown.
 export function heldText(name) {
     return "Scripts are not running: the hub restarted twice in a row while they were starting" +

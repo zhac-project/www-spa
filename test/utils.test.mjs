@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fmtSkip, reloadText, reloadKind, heldText } from "../src/utils.js";
+import { fmtSkip, reloadText, reloadKind, heldText, mergeTick } from "../src/utils.js";
 
 test("rule skip codes read as short phrases", () => {
     assert.equal(fmtSkip(""), "");
@@ -25,6 +25,17 @@ test("Apply's toast is an error when a script did not start, neutral while the h
     assert.equal(reloadKind({ loaded: 0, total: 1 }), "err");
     assert.equal(reloadKind({ queued: true }), "info");
     assert.equal(reloadKind(undefined), "info");
+});
+
+test("a status tick keeps what it leaves out, but a tick without scripts_held ends the hold", () => {
+    const shown = { remote_scripts: true, uptime: 5, scripts_held: "pump" };
+    // While held the firmware puts scripts_held in every tick: the banner stays.
+    assert.deepEqual(mergeTick(shown, { uptime: 15, scripts_held: "pump" }),
+                     { remote_scripts: true, uptime: 15, scripts_held: "pump" });
+    // A cloud Apply ended the hold: the next tick has no scripts_held, and the banner goes (status.get not needed).
+    assert.deepEqual(mergeTick(shown, { uptime: 25 }), { remote_scripts: true, uptime: 25 });
+    // Firmware that never holds: nothing changes but the merge.
+    assert.deepEqual(mergeTick({ a: 1 }, { b: 2 }), { a: 1, b: 2 });
 });
 
 test("the Scripts page says why the hub held its scripts", () => {

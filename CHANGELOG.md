@@ -16,7 +16,7 @@ across the ZHAC platform.
 
 - **Scripts → Apply** (same firmware): restarts the Lua engine (`script.reload`) so handlers use the saved text, and says "Scripts restarted: 3 of 3 started", or "The hub is still restarting scripts" after 5 s.
 
-- **Scripts page: why the scripts are not running**, when the hub held them after restarting twice in a row while they were starting (`status.scripts_held`, the wired firmware's boot-loop guard): which script was loading at the last crash, and that Apply starts them again once it is fixed or deleted.
+- **Scripts page: why the scripts are not running**, when the hub held them after restarting twice in a row while they were starting (`status.scripts_held`, the wired firmware's boot-loop guard): which script was loading at the last crash, and that Apply starts them again once it is fixed or deleted. The banner goes on the first `status.tick` without `scripts_held` (`mergeTick` in `utils.js`, tested), so an Apply from the cloud clears it too.
 
 ### Fixed
 

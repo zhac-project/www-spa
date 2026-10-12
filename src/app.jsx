@@ -18,6 +18,8 @@ import { authState, probeAuth } from "./stores/auth.js";
 import { InfoPage }         from "./pages/Info.jsx";
 import { DevicesPage }      from "./pages/Devices.jsx";
 import { DeviceDetailPage } from "./pages/DeviceDetail.jsx";
+import { MapPage }          from "./pages/Map.jsx";
+import { netmapSupported }  from "./stores/netmap.js";
 import { GroupsPage }       from "./pages/Groups.jsx";
 import { ZclGroupsPage }    from "./pages/ZclGroups.jsx";
 import { RulesPage }        from "./pages/Rules.jsx";
@@ -36,6 +38,7 @@ function ensureBootstrap() { if (!booted) { booted = true; wireBootstrap(); } }
 const NAV = [
     { id: "info",     label: "Info" },
     { id: "devices",  label: "Devices" },
+    { id: "map",      label: "Map" },
     { id: "groups",   label: "Collections" },
     { id: "zclgroups", label: "Groups" },
     { id: "rules",    label: "Rules" },
@@ -126,7 +129,7 @@ function AppShell() {
                 <button class="nav-toggle" aria-label="Menu"
                         onClick={() => setMenuOpen(o => !o)}>☰</button>
                 <nav class={menuOpen ? "open" : ""}>
-                    {NAV.map(n => (
+                    {NAV.filter((n) => n.id !== "map" || netmapSupported.value === true).map(n => (
                         <a key={n.id} href={hrefFor(n.id)}
                            class={page === n.id || (n.id === "devices" && page === "device") ? "active" : ""}
                            onClick={(e) => {
@@ -152,6 +155,7 @@ function AppShell() {
                     {page === "info"     && <InfoPage />}
                     {page === "devices"  && <DevicesPage />}
                     {page === "device"   && <DeviceDetailPage />}
+                    {page === "map"      && <MapPage />}
                     {page === "groups"   && <GroupsPage />}
                     {page === "zclgroups" && <ZclGroupsPage />}
                     {page === "rules"    && <RulesPage />}

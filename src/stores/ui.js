@@ -25,7 +25,7 @@ export const SUCCESS = Symbol("withToast.success");
 //
 // URL shape:
 //   #/info
-//   #/devices
+//   #/devices, #/map
 //   #/device/<ieee>
 //   #/groups, #/zclgroups, #/rules, #/scripts, #/log, #/diag, #/ota, #/settings
 //
@@ -35,7 +35,7 @@ export const SUCCESS = Symbol("withToast.success");
 // when the new state already matches (avoids history-spam on re-clicks).
 // ---------------------------------------------------------------------------
 const VALID_PAGES = new Set([
-    "info", "devices", "device", "groups", "zclgroups", "rules",
+    "info", "devices", "device", "map", "groups", "zclgroups", "rules",
     "scripts", "log", "diag", "ota", "settings",
 ]);
 

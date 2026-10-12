@@ -11,6 +11,7 @@ import { bootstrapStatus }   from "../stores/status.js";
 import { bootstrapAlerts }   from "../stores/alerts.js";
 import { bootstrapLogs }     from "../stores/logs.js";
 import { bootstrapDiag }     from "../stores/diag.js";
+import { bootstrapNetmap }   from "../stores/netmap.js";
 
 let bootstrapped = false;
 
@@ -31,6 +32,7 @@ export function wireBootstrap() {
             bootstrapStatus,  bootstrapDevices, bootstrapRules,
             bootstrapScripts, bootstrapGroups,  bootstrapAlerts,
             bootstrapLogs,    bootstrapDiag,
+            bootstrapNetmap,
         ];
         for (const step of steps) {
             try { await step(); }

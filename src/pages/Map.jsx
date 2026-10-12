@@ -9,7 +9,20 @@ import { navigate, hrefFor } from "../stores/ui.js";
 import { fmtAgo, hex16 } from "../utils.js";
 import { mergeLinks, buildTree, layout, scanAge, displayName, lqiBand } from "../netmap.js";
 
-const W = 880, H = 580;
+const WIDE = { w: 880, h: 580 }, NARROW = { w: 360, h: 460 };   // graph box: landscape, portrait on phones
+
+function useBox() {
+    const q = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(max-width: 600px)") : null;
+    const [narrow, setNarrow] = useState(!!q?.matches);
+    useEffect(() => {
+        if (!q) return;
+        const f = () => setNarrow(q.matches);
+        f();
+        q.addEventListener?.("change", f);
+        return () => q.removeEventListener?.("change", f);
+    }, []);
+    return narrow ? NARROW : WIDE;
+}
 const TYPE_LABEL = { coordinator: "Coordinator", router: "Router", end_device: "End device", unknown: "Unknown type" };
 const R = { coordinator: 24, router: 14, end_device: 8, unknown: 8 };
 
@@ -107,8 +120,9 @@ function EmptyCard() {
 }
 
 function GraphCard({ map, faded }) {
+    const { w: W, h: H } = useBox();
     const edges = useMemo(() => mergeLinks(map), [map]);
-    const base = useMemo(() => layout(map.nodes, edges, { width: W, height: H }), [map, edges]);
+    const base = useMemo(() => layout(map.nodes, edges, { width: W, height: H }), [map, edges, W, H]);
     const byId = useMemo(() => new Map(map.nodes.map((n) => [n.ieee, n])), [map]);
     const [moved, setMoved] = useState({});
     const [view, setView] = useState({ x: 0, y: 0, w: W, h: H });
@@ -116,13 +130,15 @@ function GraphCard({ map, faded }) {
     const svg = useRef(null);
     const drag = useRef(null);
     const pointers = useRef(new Map());
-    useEffect(() => { setMoved({}); setSel(null); setView({ x: 0, y: 0, w: W, h: H }); }, [map]);
+    useEffect(() => { setMoved({}); setSel(null); setView({ x: 0, y: 0, w: W, h: H }); }, [map, W, H]);
 
     const pos = (ieee) => moved[ieee] || base[ieee];
-    const rect = () => svg.current.getBoundingClientRect();
-    const toSvg = (cx, cy, v = view) => {
-        const r = rect();
-        return { x: v.x + ((cx - r.left) / r.width) * v.w, y: v.y + ((cy - r.top) / r.height) * v.h };
+    // Screen point -> user space through the CTM, which knows the "meet" letterboxing.
+    const toSvg = (cx, cy) => {
+        const m = svg.current.getScreenCTM();
+        if (!m) return { x: view.x, y: view.y };
+        const p = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+        return { x: p.x, y: p.y };
     };
     const zoomAt = (f, px, py, v = view) => {
         const w = Math.min(W * 4, Math.max(W / 8, v.w * f)), h = w * (H / W);
@@ -140,11 +156,11 @@ function GraphCard({ map, faded }) {
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pointers.current.size === 2) {   // pinch
             const [a, b] = [...pointers.current.values()];
-            drag.current = { pinch: Math.hypot(a.x - b.x, a.y - b.y), view };
+            drag.current = { pinch: Math.hypot(a.x - b.x, a.y - b.y), view, mid: toSvg((a.x + b.x) / 2, (a.y + b.y) / 2) };
             return;
         }
         const ieee = e.target.closest?.("[data-ieee]")?.getAttribute("data-ieee") || null;
-        drag.current = { ieee, cx: e.clientX, cy: e.clientY, view, moved: false };
+        drag.current = { ieee, cx: e.clientX, cy: e.clientY, view, moved: false, scale: svg.current.getScreenCTM()?.a || 1 };
     };
     const onMove = (e) => {
         if (!pointers.current.has(e.pointerId)) return;
@@ -153,7 +169,7 @@ function GraphCard({ map, faded }) {
         if (!d) return;
         if (d.pinch && pointers.current.size === 2) {
             const [a, b] = [...pointers.current.values()];
-            const mid = toSvg((a.x + b.x) / 2, (a.y + b.y) / 2, d.view);
+            const mid = d.mid;
             setView(zoomAt(d.pinch / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mid.x, mid.y, d.view));
             return;
         }
@@ -162,8 +178,7 @@ function GraphCard({ map, faded }) {
         if (d.ieee) {
             setMoved((m) => ({ ...m, [d.ieee]: toSvg(e.clientX, e.clientY) }));
         } else {
-            const r = rect();
-            const dx = ((e.clientX - d.cx) / r.width) * d.view.w, dy = ((e.clientY - d.cy) / r.height) * d.view.h;
+            const dx = (e.clientX - d.cx) / d.scale, dy = (e.clientY - d.cy) / d.scale;
             setView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
         }
     };

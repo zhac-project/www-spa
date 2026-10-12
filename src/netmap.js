@@ -44,7 +44,7 @@ export function mergeLinks(map) {
         const ba = a === p.x ? p.yx : p.xy;
         const both = ab != null && ba != null;
         const worst = both ? Math.min(ab, ba) : (ab ?? ba);
-        return { a, b, ab, ba, tree: p.parent != null, band: lqiBand(worst), label: both ? `${ab} / ${ba}` : String(worst) };
+        return { a, b, ab, ba, tree: p.parent != null, band: lqiBand(worst), label: both ? `${ab} / ${ba}` : worst == null ? "—" : String(worst) };
     });
 }
 
@@ -106,7 +106,8 @@ export function buildTree(map) {
 // would be the upgrade if maps grow.
 export function layout(nodes, edges, { width = 880, height = 580, steps = 300 } = {}) {
     const n = nodes.length;
-    const cx = width / 2, cy = height / 2, pad = 24;
+    const cx = width / 2, cy = height / 2;
+    const padX = 60, padT = 24, padB = 40;   // labels sit below a node and run wide
     const r0 = Math.min(width, height) * 0.38;
     const pos = {};
     nodes.forEach((nd, i) => {
@@ -146,8 +147,8 @@ export function layout(nodes, edges, { width = 880, height = 580, steps = 300 } 
                 pos[nd.ieee].x += (v.x / len) * m;
                 pos[nd.ieee].y += (v.y / len) * m;
             }
-            pos[nd.ieee].x = Math.min(width - pad, Math.max(pad, pos[nd.ieee].x));
-            pos[nd.ieee].y = Math.min(height - pad, Math.max(pad, pos[nd.ieee].y));
+            pos[nd.ieee].x = Math.min(width - padX, Math.max(padX, pos[nd.ieee].x));
+            pos[nd.ieee].y = Math.min(height - padB, Math.max(padT, pos[nd.ieee].y));
         }
     }
     return pos;

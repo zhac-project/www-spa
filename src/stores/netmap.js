@@ -38,7 +38,8 @@ export async function bootstrapNetmap() {
 export async function startScan() {
     try {
         await call("net.map.scan");
-        netmap.value = { ...netmap.value, scanning: true, progress: { done: 0, total: 0, current: "" } };
+        const cur = netmap.value;
+        netmap.value = { ...cur, scanning: true, progress: cur.scanning ? cur.progress : { done: 0, total: 0, current: "" } };
     } catch (e) {
         showToast(scanErrorText(e.message), "err");
     }

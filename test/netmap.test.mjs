@@ -92,3 +92,19 @@ test("scan errors read as sentences", () => {
     assert.equal(scanErrorText("oom"), "The hub ran out of memory for the map");
     assert.equal(scanErrorText("something"), "Scan failed: something");
 });
+
+test("lqi null: no number at all reads as a dash, one number stands alone", () => {
+    const m = {
+        nodes: [{ ieee: "0x1", type: "coordinator" }, { ieee: "0x2", type: "router" }, { ieee: "0x3", type: "router" }],
+        links: [
+            { src: "0x1", dst: "0x2", lqi: null, rel: "none" },
+            { src: "0x1", dst: "0x3", lqi: null, rel: "none" },
+            { src: "0x3", dst: "0x1", lqi: 200, rel: "none" },
+        ],
+    };
+    const edges = mergeLinks(m);
+    const none = edges.find((e) => e.b === "0x2");
+    assert.deepEqual([none.label, none.band], ["—", "none"]);
+    const one = edges.find((e) => e.b === "0x3");
+    assert.deepEqual([one.label, one.band], ["200", "good"]);
+});

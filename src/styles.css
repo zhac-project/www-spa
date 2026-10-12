@@ -1109,6 +1109,7 @@ details.card > summary + * { margin-top: 12px; }
 .nm-edge.good line { stroke: var(--success); }
 .nm-edge.fair line { stroke: var(--warn); }
 .nm-edge.poor line { stroke: var(--danger); }
+.nm-edge.none line { stroke: var(--border-strong); }
 .nm-edge.other line { stroke-dasharray: 6 6; }
 .nm-edge.dim { opacity: .2; }
 .nm-edge .pill { fill: var(--card-bg); stroke: var(--border); }

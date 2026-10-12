@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Added
 
+- **Map tab: a Zigbee network map.** Scan the mesh from the hub page and see it as a graph (coordinator, routers, end devices; links coloured by LQI, both ends' LQI on each link; drag, zoom, tap a device) and as a by-parent list, plus the hub's devices no router listed. The tab only shows on hubs that can scan (wired hubs).
+
 - **"Restart hub" button** (Settings → Misc, wired hub only, gated on the firmware reporting `restart: true` in `/api/status`/`status.get` so older firmware just doesn't show it): confirms ("Restart the hub now? Devices stay paired…"), sends WS `system.restart`, then shows "Restarting…" until the WebSocket actually drops and reconnects (not just until the command replies), then "Hub is back" for a few seconds. Reuses the existing auto-reconnect in `src/ws/client.js` and the header's connected flag — no new polling loop.
 
 - **The ZHAC logo and favicons**: the new mark (28 px) before the word in the header. The sign-in card shows the mark above the word on the light theme and the dark logo (it carries the word) on the dark theme, switched by CSS on `data-theme`; the splash shows the mark above the word in both themes (`components/BrandHero.jsx`; only the sign-in card carries the dark logo, and it is lazy-loaded, so a splash or a light page never downloads it). Browser-tab and home-screen icons are new: `favicon.ico`, a 192 px icon and an Apple touch icon, linked from `index.html`. The five images (≈118 KB together) live in `src/assets/brand/`, so Vite gives them hashed names under `/assets/` (the hub caches those for a year, so a future logo change shows at once); keep their names short, the S3 SPIFFS image allows 31 characters for the whole path.

@@ -18,19 +18,20 @@ function apply(data) {
     netmap.value = {
         scanning: !!data?.scanning,
         progress: data?.progress || null,
-        map: map || prev.map,
+        map: map || (data?.scanning ? prev.map : null),
         receivedAt: fresh ? Date.now() : prev.receivedAt,
     };
 }
 
-// Any failure hides the tab: "unknown cmd" on hubs without the ops, and the
-// dual-chip S3 may answer differently. Runs again on every reconnect.
+// The first answer decides: a failure before any success ("unknown cmd" on hubs
+// without the ops, or whatever the dual-chip S3 says) hides the tab. Once the
+// hub has answered, a transport hiccup keeps the tab. Re-runs on every reconnect.
 export async function bootstrapNetmap() {
     try {
         apply(await call("net.map.get"));
         netmapSupported.value = true;
     } catch (_) {
-        netmapSupported.value = false;
+        if (netmapSupported.value !== true) netmapSupported.value = false;
     }
 }
 

@@ -903,6 +903,55 @@ function NoMotionControl({ d, ieee }) {
     );
 }
 
+// "No motion since" (z2m option no_occupancy_since) for any motion sensor.
+// PRESENTATION ONLY: the hub publishes no_occupancy_since = N once the sensor
+// has said "no motion" and N seconds pass without motion, and 0 on the next
+// motion. Shown when the device reports occupancy and the firmware carries
+// no_occupancy_since in device.get.
+function NoMotionSinceControl({ d, ieee }) {
+    const [val, setVal] = useState(d.no_occupancy_since || "");
+    const [busy, setBusy] = useState(false);
+    const hasOccupancy = (d.exposes || []).some(e => e && e.name === "occupancy");
+    if (d.no_occupancy_since == null || !hasOccupancy) return null;
+    const save = async () => {
+        const n = val === "" ? 0 : Number(val);
+        if (!Number.isInteger(n) || n < 0 || n > 65535) {
+            showToast("Enter whole seconds, 0 to 65535", "err");
+            return;
+        }
+        setBusy(true);
+        try {
+            await call("device.options.set", { ieee, no_occupancy_since: n });
+            showToast(n === 0 ? "No motion since: off" : `no_occupancy_since = ${n} after ${n} s without motion`, "ok");
+        } catch (_) {
+            showToast("Failed to set no motion since", "err");
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <div class="opt-throttle">
+            <label class="form-row">
+                <span>No motion since (s)</span>
+                <input type="number" min="0" max="65535" step="1" value={val}
+                       placeholder="off" disabled={busy}
+                       onInput={e => setVal(e.currentTarget.value)} />
+            </label>
+            <button class="btn" disabled={busy} onClick={save}>
+                {busy ? "Saving…" : "Save"}
+            </button>
+            <p class="tab-hint">
+                After the sensor reports no motion, the hub sets
+                <code> no_occupancy_since</code> to this many seconds once that long
+                passes without motion, and back to 0 on the next motion (like
+                zigbee2mqtt). For a rule such as
+                <code> ON hall#no_occupancy_since=300 DO light#state=0</code>.
+                Empty or 0 = off.
+            </p>
+        </div>
+    );
+}
+
 // Normalise an IEEE-64 address string for case/format-insensitive
 // comparison. Firmware formats device.rainmaker.list entries as
 // `0x%016llX` (upper-case hex, zero-padded to 16 digits); the ieee this
@@ -1070,6 +1119,7 @@ function OptionsTab({ d, ieee }) {
     return (
         <div class="tab-panel">
             <NoMotionControl d={d} ieee={ieee} />
+            <NoMotionSinceControl d={d} ieee={ieee} />
             <ThrottleControl d={d} ieee={ieee} />
             <RainMakerExposeControl ieee={ieee} />
             <p class="tab-hint">

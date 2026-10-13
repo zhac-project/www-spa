@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Added
 
+- **"No motion since (s)" on every motion sensor** (Device → Options): sets the hub's `no_occupancy_since` option (z2m `no_occupancy_since`, one interval). After the sensor reports no motion, the hub sets `no_occupancy_since` to that many seconds once that long passes without motion and back to 0 on the next motion, for rules such as `ON hall#no_occupancy_since=300 DO light#state=0`. Shown when the device exposes `occupancy` and the firmware carries `no_occupancy_since` in `device.get`.
+
 - **Map tab: a Zigbee network map.** Scan the mesh from the hub page and see it as a graph (coordinator, routers, end devices; links coloured by LQI, both ends' LQI on each link; drag, zoom, tap a device) and as a by-parent list, plus the hub's devices no router listed. The tab only shows on hubs that can scan (wired hubs).
 
 - **"Restart hub" button** (Settings → Misc, wired hub only, gated on the firmware reporting `restart: true` in `/api/status`/`status.get` so older firmware just doesn't show it): confirms ("Restart the hub now? Devices stay paired…"), sends WS `system.restart`, then shows "Restarting…" until the WebSocket actually drops and reconnects (not just until the command replies), then "Hub is back" for a few seconds. Reuses the existing auto-reconnect in `src/ws/client.js` and the header's connected flag — no new polling loop.

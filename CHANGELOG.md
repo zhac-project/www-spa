@@ -8,6 +8,10 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Fixed
+
+- **ZCL Groups page: a member is removed from its own endpoint**: membership is per endpoint now (hub `groups.all` members carry `ep`); the page always removed on endpoint 1. A member on another endpoint shows `(ep N)`.
+
 ### Added
 
 - **"No motion since (s)" on every motion sensor** (Device → Options): sets the hub's `no_occupancy_since` option (z2m `no_occupancy_since`, one interval). After the sensor reports no motion, the hub sets `no_occupancy_since` to that many seconds once that long passes without motion and back to 0 on the next motion, for rules such as `ON hall#no_occupancy_since=300 DO light#state=0`. Shown when the device exposes `occupancy` and the firmware carries `no_occupancy_since` in `device.get`.

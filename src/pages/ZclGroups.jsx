@@ -36,8 +36,9 @@ export function ZclGroupsPage() {
         const ok = await withToast(() => deviceGroupsAdd(ieee, 1, gid), "Added to group", "Add failed");
         if (ok === SUCCESS) { setSel(s => ({ ...s, [gid]: "" })); refresh(); }
     }
-    async function removeMember(gid, ieee) {
-        const ok = await withToast(() => deviceGroupsRemove(ieee, 1, gid), "Removed from group", "Remove failed");
+    // Membership is per endpoint: remove it from the endpoint that holds it.
+    async function removeMember(gid, ieee, ep) {
+        const ok = await withToast(() => deviceGroupsRemove(ieee, ep, gid), "Removed from group", "Remove failed");
         if (ok === SUCCESS) refresh();
     }
     async function doCreate() {
@@ -88,9 +89,9 @@ export function ZclGroupsPage() {
                                 {(g.members || []).length === 0
                                     ? <span class="muted">No members.</span>
                                     : (g.members || []).map(m => (
-                                        <span key={m.ieee} class="chip">
-                                            {nameOf(m.ieee)}
-                                            <button title="Remove" onClick={() => removeMember(g.gid, m.ieee)}>×</button>
+                                        <span key={`${m.ieee}/${m.ep || 1}`} class="chip">
+                                            {nameOf(m.ieee)}{(m.ep || 1) !== 1 ? ` (ep ${m.ep})` : ""}
+                                            <button title="Remove" onClick={() => removeMember(g.gid, m.ieee, m.ep || 1)}>×</button>
                                         </span>
                                     ))}
                             </div>

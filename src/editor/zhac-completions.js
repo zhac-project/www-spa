@@ -65,11 +65,6 @@ export const ZHAC_API = [
         "info": "Yield the current coroutine for approximately ms milliseconds. See §3.2 for the full implementation details."
     },
     {
-        "label": "zhac.sleep: timer pool exhausted",
-        "detail": "",
-        "info": "Symptom: ERROR-level lua_sched log with that message, usually from a busy-looping handler."
-    },
-    {
         "label": "zhac.telegram_send",
         "detail": "(text [, chat_id [, parse_mode]]) → bool",
         "info": "Send a Telegram message. Async / fire-and-forget — return value indicates the HAP frame was queued, not the HTTP outcome (see S3 logs for that)."

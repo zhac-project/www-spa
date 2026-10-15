@@ -63,6 +63,8 @@ for (let i = 0; i < lines.length; i++) {
     const sigRaw = m[1];                              // zhac.foo(a, b) → bool
     const parenIdx = sigRaw.indexOf("(");
     const label = parenIdx > 0 ? sigRaw.slice(0, parenIdx) : sigRaw;
+    // A heading that is not a function (`zhac.sleep: timer pool exhausted`) is not a completion.
+    if (!/^zhac\.\w+$/.test(label)) continue;
 
     // Skip "see §x.y" cross-refs — we already have the canonical entry.
     const tail = lines[i].trim();

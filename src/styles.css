@@ -35,6 +35,8 @@
     --surface-hover:  #e9ecef;       /* button:hover */
     --surface-sunken: #eef0f2;       /* dev-tabs strip */
     --surface-soft:   #e9ecef;       /* table th, dev-bottom-bar */
+    --light-ink:      #1d2530;       /* light card: bulb glyph on a light glow (the light's own colour, so not re-tuned in dark) */
+    --light-ink-deep: #ffffff;       /* light card: bulb glyph on a deep glow (e.g. pure blue); not re-tuned in dark */
     --surface-input:  #ffffff;       /* form inputs, textarea */
     --gutter-bg:      #e9ecef;       /* .code-editor-gutter */
     --secondary-btn-bg: #e9ecef;     /* button.secondary */
@@ -878,6 +880,58 @@ textarea {
     padding: 2px 6px; border-radius: var(--radius-control); background: var(--card-bg);
 }
 .ro-unit { color: var(--muted); font-size: var(--text-xs); margin-left: 6px; }
+
+/* ── DeviceDetail — light card ─────────────────────────────────────── */
+.light-card {
+    max-width: 620px; margin: 0 0 16px; padding: 16px; box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface);
+    display: flex; flex-direction: column; gap: 16px;
+}
+.light-head { display: flex; align-items: center; gap: 12px; }
+.light-icon {
+    width: 44px; height: 44px; flex: none; box-sizing: border-box; border-radius: 50%;
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text);
+}
+.light-title { flex: 1 1 auto; min-width: 0; }
+.light-title h4 { margin: 0; font-size: var(--text-base); }
+.light-status { margin-top: 2px; font-size: var(--text-sm); color: var(--muted); }
+.light-power { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-sm); cursor: pointer; }
+/* The global .toggle hides its checkbox with display:none, which also drops it from the Tab order: keep it focusable here. */
+.light-power .toggle input { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.light-power .toggle input:focus-visible + .toggle-slider { outline: 2px solid var(--blue); outline-offset: 3px; }
+.light-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--text-sm); }
+.light-row-head label { font-weight: 600; }
+.light-range {
+    -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 12px;
+    margin: 16px 0 6px; border-radius: 6px; cursor: pointer;
+}
+.light-range::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--blue); box-shadow: var(--shadow-1);
+}
+.light-range::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--blue);
+}
+.light-range:focus-visible { outline: 2px solid var(--blue); outline-offset: 6px; }
+.light-range-ct { background: linear-gradient(90deg, #ffb46b, #ffe2bf 30%, #fff6ea 55%, #e3eeff 80%, #c4dcff); }
+.light-ends { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--muted); }
+.light-modes { display: inline-flex; align-self: flex-start; gap: 4px; padding: 3px; border-radius: 12px; background: var(--surface-soft); }
+.light-modes button { min-height: 44px; padding: 0 18px; border: none; border-radius: var(--radius-control); background: transparent; color: var(--muted); font-weight: 600; }
+.light-modes button[aria-pressed="true"] { background: var(--surface); color: var(--text); }
+.light-colour { display: flex; flex-direction: column; gap: 14px; }
+.light-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.light-picker { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.light-picker input { width: 64px; height: 44px; box-sizing: border-box; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); cursor: pointer; }
+.light-hex { font-size: var(--text-sm); color: var(--muted); }
+.light-hex code { font-family: var(--font-mono); color: var(--text); }
+.light-presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.light-preset { width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; }
+.light-preset[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+.light-raw { font-size: var(--text-sm); color: var(--muted); }
+.light-raw summary { cursor: pointer; padding: 6px 0; }
+.light-raw dl { margin: 8px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text); }
+.light-raw dt, .light-raw dd { display: inline; margin: 0; }
+.light-raw dt { color: var(--muted); }
 
 /* ───── LuaEditor (CodeMirror 6) ───────────────────────────────────── */
 .lua-editor-wrap { display: flex; flex-direction: column; gap: 6px; }

@@ -1051,6 +1051,16 @@ textarea {
 .theme-radio { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .theme-radio input[type="radio"] { margin: 0; }
 
+/* Settings → Remote → Log to cloud: one bordered label per level, a 44 px target each. */
+.log-levels { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.log-level {
+    display: flex; align-items: flex-start; gap: 10px; min-height: 44px; box-sizing: border-box;
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-control);
+    font-size: var(--text-sm); cursor: pointer;
+}
+.log-level.checked { border-color: var(--blue); }
+.log-level input[type="radio"] { margin: 2px 0 0; flex-shrink: 0; }
+
 /* ── Auth gate + pre-app splash ────────────────────────────────────── */
 .splash, .login-gate {
     min-height: 100vh;

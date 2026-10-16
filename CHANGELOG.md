@@ -14,6 +14,7 @@ across the ZHAC platform.
 
 ### Added
 
+- **Settings → Remote: "Log to cloud"** (wired hubs whose `status` reports `log_to_cloud`): a switch, off by default, and when on a choice of Errors, Warnings (the default) or Everything, each with what it sends. The card shows "Sent N lines · N dropped (since the hub started)" from its `remote.status` poll. Only this page can turn it on; the cloud relay refuses the setting.
 - **"No motion since (s)" on every motion sensor** (Device → Options): sets the hub's `no_occupancy_since` option (z2m `no_occupancy_since`, one interval). After the sensor reports no motion, the hub sets `no_occupancy_since` to that many seconds once that long passes without motion and back to 0 on the next motion, for rules such as `ON hall#no_occupancy_since=300 DO light#state=0`. Shown when the device exposes `occupancy` and the firmware carries `no_occupancy_since` in `device.get`.
 
 - **Map tab: a Zigbee network map.** Scan the mesh from the hub page and see it as a graph (coordinator, routers, end devices; links coloured by LQI, both ends' LQI on each link; drag, zoom, tap a device) and as a by-parent list, plus the hub's devices no router listed. The tab only shows on hubs that can scan (wired hubs).

@@ -13,6 +13,7 @@ import { Card } from "../components/Card.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
+import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
 
 export function SettingsPage() {
@@ -1051,6 +1052,9 @@ function RemoteCard({ d, write }) {
                     </p>
                 </>
             )}
+            {d.log_to_cloud !== undefined && (
+                <LogToCloud level={d.log_to_cloud} st={st} write={write} />
+            )}
             {st && (
                 <>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
@@ -1071,6 +1075,40 @@ function RemoteCard({ d, write }) {
                 </>
             )}
         </Card>
+    );
+}
+
+// Settings → Remote → "Log to cloud" (spec 2026-10-06 cloud logs §3.1). Off by default; switching on picks
+// Warnings. Only this page can change it: the cloud relay refuses the key (local_only). The counters come from
+// the card's own 5 s remote.status poll; status itself is only re-read after a write.
+function LogToCloud({ level, st, write }) {
+    const on = !!level && level !== "off";
+    return (
+        <>
+            <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+            <ToggleRow label="Log to cloud"
+                       checked={on}
+                       style=";min-height:44px;margin-bottom:0"
+                       onChange={(v) => write({ log_to_cloud: v ? "warnings" : "off" }, levelToast(v ? "warnings" : "off", true))} />
+            <p class="field-hint" style="margin:0 0 4px;line-height:1.45">
+                Sends this hub's log lines to ZHAC Cloud, where the owner and admins can read them. Only this page can
+                turn it on.
+            </p>
+            {on && (
+                <div class="log-levels" role="radiogroup" aria-label="Log to cloud level">
+                    {LOG_LEVELS.map((l) => (
+                        <label key={l.id} class={"log-level" + (level === l.id ? " checked" : "")}>
+                            <input type="radio" name="log-level" value={l.id} checked={level === l.id}
+                                   onChange={() => write({ log_to_cloud: l.id }, levelToast(l.id, false))} />
+                            <span><b>{l.name}</b> <span class="muted">{l.meaning}</span></span>
+                        </label>
+                    ))}
+                </div>
+            )}
+            {on && st && st.log_sent !== undefined && (
+                <p class="field-hint" style="margin:10px 0 0">{countersText(st.log_sent, st.log_dropped)}</p>
+            )}
+        </>
     );
 }
 

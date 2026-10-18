@@ -14,6 +14,7 @@ across the ZHAC platform.
 
 ### Added
 
+- **Settings: the WiFi card on wired hubs with a Wi-Fi co-processor** (`status.wifi_hosted`, the P4 test variant): shown beside the Ethernet card, same scan / join / forget. Such a hub has no AP mode, so the card reads "Not connected" (or "Co-processor not answering") instead, "Forget WiFi" does not reboot, and the card refreshes itself after a join.
 - **Settings → Remote: "Log to cloud"** (wired hubs whose `status` reports `log_to_cloud`): a switch, off by default, and when on a choice of Errors, Warnings (the default) or Everything, each with what it sends. The card shows "Sent N lines · N dropped (since the hub started)" from its `remote.status` poll. Only this page can turn it on; the cloud relay refuses the setting.
 - **"No motion since (s)" on every motion sensor** (Device → Options): sets the hub's `no_occupancy_since` option (z2m `no_occupancy_since`, one interval). After the sensor reports no motion, the hub sets `no_occupancy_since` to that many seconds once that long passes without motion and back to 0 on the next motion, for rules such as `ON hall#no_occupancy_since=300 DO light#state=0`. Shown when the device exposes `occupancy` and the firmware carries `no_occupancy_since` in `device.get`.
 

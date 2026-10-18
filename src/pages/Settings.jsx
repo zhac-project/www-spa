@@ -20,6 +20,10 @@ export function SettingsPage() {
     const d = status.value || {};
     const kind = hubKind(d);
     const chipWord = kind === "dual" ? "P4" : "hub";
+    // A wired hub with a Wi-Fi co-processor (P4 test variant) shows the WiFi
+    // card beside Ethernet. It has no AP mode and forgetting does not reboot.
+    const hostedWifi = kind === "wired" && d.wifi_hosted === true;
+    const showWifi = kind !== "wired" || hostedWifi;
 
     // Time ----------------------------------------------------------------
     const [ntp, setNtp] = useState("");
@@ -47,7 +51,7 @@ export function SettingsPage() {
     async function loadWifi() {
         try { setWifi(await call("wifi.status")); } catch (_) {}
     }
-    useEffect(() => { if (kind && kind !== "wired") loadWifi(); }, [kind]);
+    useEffect(() => { if (kind && showWifi) loadWifi(); }, [kind, showWifi]);
 
     async function doScan() {
         setScanning(true);
@@ -59,12 +63,20 @@ export function SettingsPage() {
     }
     async function doConnect(e) {
         e.preventDefault();
-        try { await call("wifi.connect", { ssid, pass }); showToast("Connecting…", "ok"); }
+        try {
+            await call("wifi.connect", { ssid, pass });
+            showToast("Connecting…", "ok");
+            if (hostedWifi) setTimeout(loadWifi, 8000);   // no reboot here: show the outcome
+        }
         catch (e) { showToast("Connect failed: " + e.message, "err"); }
     }
     async function doForget() {
-        if (!confirm("Forget WiFi credentials and reboot into AP mode?")) return;
-        try { await call("wifi.disconnect"); showToast("Forgotten — rebooting", "ok"); }
+        if (!confirm(hostedWifi ? "Forget the WiFi network?" : "Forget WiFi credentials and reboot into AP mode?")) return;
+        try {
+            await call("wifi.disconnect");
+            showToast(hostedWifi ? "Forgotten" : "Forgotten — rebooting", "ok");
+            if (hostedWifi) loadWifi();
+        }
         catch (e) { showToast("Failed: " + e.message, "err"); }
     }
 
@@ -159,11 +171,14 @@ export function SettingsPage() {
                     </div>
                 </Card>
 
-                {kind === "wired" ? <EthernetCard /> : <Card title="WiFi">
+                {kind === "wired" && <EthernetCard />}
+                {showWifi && <Card title="WiFi">
                     <div style="margin-bottom:12px">
                         {wifi == null ? "…" : (
                             wifi.mode === "ap"
                                 ? <><Badge kind="warn">AP Mode</Badge> SSID: <strong>{wifi.ssid}</strong> — IP: {wifi.ip}</>
+                                : wifi.mode === "off"
+                                ? <><Badge kind="warn">{wifi.ready === false ? "Co-processor not answering" : "Not connected"}</Badge>{wifi.ssid ? <>{" "}<strong>{wifi.ssid}</strong></> : null}</>
                                 : <><Badge kind="ok">Connected</Badge>{" "}<strong>{wifi.ssid}</strong> — IP: {wifi.ip} — RSSI: {wifi.rssi} dBm</>
                         )}
                     </div>
@@ -191,7 +206,7 @@ export function SettingsPage() {
                     </form>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
                     <button type="button" class="danger small" onClick={doForget}>
-                        Forget WiFi &amp; Switch to AP Mode
+                        {hostedWifi ? "Forget WiFi" : <>Forget WiFi &amp; Switch to AP Mode</>}
                     </button>
                 </Card>}
 

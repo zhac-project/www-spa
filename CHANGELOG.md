@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **"Too many wrong passwords" instead of "Login failed (429)"** (`stores/auth.js`, Settings → change password). zhac-wired-core now answers a peer, or the hub as a whole, that keeps entering wrong passwords with 429 for a minute (firmware review 2026-10-24 HS-06); the sign-in card and the password change say to wait a minute.
+
 - **A hub that refuses the page's address says how to reach it** (`stores/auth.js`, `app.jsx`). zhac-wired-core now refuses requests that do not come from its own page (firmware review 2026-10-24 HS-01): with sign-in off it answers only at its IP address or `<name>.local`, and the first password set-up does the same. Its 403 `cross_site` on status, login or setup used to read as "Can't reach the controller" or "A password was already set"; the page now says to open the hub at its IP address or `.local` name, and that a reverse proxy in front of it must pass the Host header through.
 
 - **ZCL Groups page: a member is removed from its own endpoint**: membership is per endpoint now (hub `groups.all` members carry `ep`); the page always removed on endpoint 1. A member on another endpoint shows `(ep N)`.

@@ -1266,6 +1266,7 @@ function ChangePasswordCard() {
         }
         setBusy(false);
         if (r.status === 401) { showToast("Current password is wrong", "err"); return; }
+        if (r.status === 429) { showToast("Too many wrong passwords — wait a minute, then try again", "err"); return; }
         if (!r.ok)            { showToast("Change failed (" + r.status + ")", "err"); return; }
         const data = await r.json().catch(() => null);
         if (data && data.token) {

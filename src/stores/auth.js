@@ -128,6 +128,10 @@ export async function submitPassword(password) {
         authError.value = "Wrong password.";
         return false;
     }
+    if (r.status === 429) {           // locked out for a minute (firmware review 2026-10-24 HS-06)
+        authError.value = "Too many wrong passwords — wait a minute, then try again.";
+        return false;
+    }
     if (await isCrossSite(r)) {
         authError.value = CROSS_SITE_HELP;
         return false;

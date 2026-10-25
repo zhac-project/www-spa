@@ -3,6 +3,7 @@
 // WebSocket transport: single long-lived connection, req/rsp correlation by id,
 // and a plain event dispatcher for server-initiated messages. Auto-reconnects.
 import { ui } from "../stores/ui.js";
+import { frameTooLarge } from "./frame.js";
 
 let ws = null;
 let seq = 1;
@@ -87,7 +88,9 @@ function connect() {
 
 connect();
 
-// Fire a command; resolve with `data`, reject with Error(err).
+// Fire a command; resolve with `data`, reject with Error(err). A command too
+// long for one frame is refused here with "too_large": the hub would close
+// the socket on it.
 export function call(cmd, args = {}) {
     return new Promise((resolve, reject) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -95,9 +98,11 @@ export function call(cmd, args = {}) {
             return;
         }
         const id = seq++;
+        const text = JSON.stringify({ id, cmd, args });
+        if (frameTooLarge(text)) { reject(new Error("too_large")); return; }
         const entry = { resolve, reject, cmd, sentAt: Date.now() };
         pending.set(id, entry);
-        try { ws.send(JSON.stringify({ id, cmd, args })); }
+        try { ws.send(text); }
         catch (e) { pending.delete(id); reject(e); return; }
         setTimeout(() => {
             if (pending.get(id) === entry) {

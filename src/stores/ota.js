@@ -34,9 +34,10 @@ export async function triggerOtaP4(url) {
 }
 
 // Single-chip builds (wired) update the one chip that runs everything.
-// Progress events carry target "self".
-export async function triggerOtaSelf(url) {
-    return call("ota.update", { url });
+// Progress events carry target "self". A wired hub refuses an older release
+// unless allowOlder (firmware review 2026-10-24 HS-10).
+export async function triggerOtaSelf(url, allowOlder = false) {
+    return call("ota.update", allowOlder ? { url, allow_older: true } : { url });
 }
 
 // Progress state per target. Each entry: {state, offset, total, pct, err}.

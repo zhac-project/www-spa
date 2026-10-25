@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Firmware page: installing an older release asks first, and says so** (firmware review 2026-10-24 HS-10). zhac-wired-core now refuses an update image built from another project, and an older release unless `ota.update` carries `allow_older`. The version list passes it for a release marked "Older", whose confirm now warns that older firmware may lack fixes and may not read everything this version saved. The URL form on a wired hub has "Allow an older version" (`stores/ota.js` `triggerOtaSelf(url, allowOlder)`).
+
 - **Checking a long script no longer drops the hub page's connection** (firmware review 2026-10-24 HS-12). The editor's syntax check sent the whole source in one `script.check` WebSocket frame; past the hub's 8 KB frame cap that garbled the socket, and the check never answered (the hub now closes the session instead). `call()` refuses a command too long for one frame with `too_large` (`ws/frame.js`), and the check (`checkScript` in `stores/scripts.js`) then goes over `POST /api/scripts/check/check` on wired and single-chip hubs. The dual-chip S3 has no such route (it would save a script named `check`), so there a long source is not checked as it is typed. Test `test/script-check.test.mjs`.
 
 - **Settings → Zigbee: the network reset says what it does on a wired hub** (firmware review 2026-10-24 PB-06): zhac-wired-core now performs `zigbee.reset` (a new network with new keys; every device must be paired again, settings, rules, scripts and sign-in stay). The warning and the hint said all rules and scripts would be erased too; on a wired hub they now say what really goes. The dual-chip text is unchanged.

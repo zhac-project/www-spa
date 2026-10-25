@@ -65,8 +65,10 @@ const RELATION = { installed: "Installed", newer: "Newer", older: "Older", unkno
 
 // A wired hub installs an older release only when asked to (firmware review
 // 2026-10-24 HS-10); the confirm says what that can cost.
-const OLDER_TEXT = "\n\nThis is an older release than the one installed. It may lack fixes and may not " +
-                   "read everything this version saved; if devices are missing afterwards, update again.";
+const OLDER_RISK = "may lack fixes and may not read everything this version saved; if devices are " +
+                   "missing afterwards, update again.";
+const OLDER_TEXT = `\n\nThis is an older release than the one installed. It ${OLDER_RISK}`;
+const OLDER_URL_TEXT = `\n\nIf this is an older release than the one installed, it ${OLDER_RISK}`;   // its version is unknown here
 
 // Published versions that fit one chip, with an Install button each.
 // `hub` = { chip, revision }; `installed` = the version the chip reports.
@@ -188,7 +190,7 @@ function SingleChipOta({ kind }) {
             showToast("URL must be http(s) and end in .bin", "err");
             return;
         }
-        if (!confirm(`Update the ${chip} firmware from this URL?\n\n${confirmText}${older ? OLDER_TEXT : ""}`)) return;
+        if (!confirm(`Update the ${chip} firmware from this URL?\n\n${confirmText}${older ? OLDER_URL_TEXT : ""}`)) return;
         setBusy(true);
         await withToast(() => triggerOtaSelf(u, older), "Update started", "Update failed");
         setBusy(false);

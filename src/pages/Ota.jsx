@@ -216,10 +216,10 @@ function SingleChipOta({ kind }) {
             {d.ota_state === "pending" && (
                 <div class="card clock-unset" role="status">
                     <p><strong>The new firmware is on trial.</strong> The hub keeps it once its
-                    storage, web server and Zigbee radio check out, which takes under a minute
-                    on a healthy hub. If that does not happen within ten minutes it goes back
-                    to the previous version by itself. Wait for the trial to end before
-                    starting another update.</p>
+                    storage, web server and Zigbee radio have stayed healthy for five minutes in
+                    a row. If that does not happen within ten minutes, or the hub restarts before
+                    then, it goes back to the previous version by itself. Wait for the trial to
+                    end before starting another update.</p>
                 </div>
             )}
             {d.ota_rollback_reason && (

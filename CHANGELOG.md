@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **A hub that refuses the page's address says how to reach it** (`stores/auth.js`, `app.jsx`). zhac-wired-core now refuses requests that do not come from its own page (firmware review 2026-10-24 HS-01): with sign-in off it answers only at its IP address or `<name>.local`, and the first password set-up does the same. Its 403 `cross_site` on status, login or setup used to read as "Can't reach the controller" or "A password was already set"; the page now says to open the hub at its IP address or `.local` name, and that a reverse proxy in front of it must pass the Host header through.
+
 - **ZCL Groups page: a member is removed from its own endpoint**: membership is per endpoint now (hub `groups.all` members carry `ep`); the page always removed on endpoint 1. A member on another endpoint shows `(ep N)`.
 
 ### Added

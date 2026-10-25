@@ -50,12 +50,31 @@ async function tokenAccepted(token) {
     }
 }
 
+// The hub refused a request as not coming from its own page (firmware
+// review 2026-10-24 HS-01): with sign-in off, and for the first password
+// set-up, it answers only at its IP address or <name>.local, and only to a
+// page that is not behind a proxy rewriting Host.
+const CROSS_SITE_HELP =
+    "The hub did not accept this address. Open it at its IP address or at its .local name " +
+    "(a reverse proxy in front of it must pass the Host header through).";
+
+async function isCrossSite(r) {
+    if (r.status !== 403) return false;
+    return (await r.clone().json().then(d => d && d.error).catch(() => "")) === "cross_site";
+}
+
 // Probe auth state once on boot (and on manual retry).
 export async function probeAuth() {
     authState.value = "checking";
+    authError.value = "";
     let status;
     try {
         const r = await fetch("/api/status", { cache: "no-store" });
+        if (await isCrossSite(r)) {
+            authError.value = CROSS_SITE_HELP;
+            authState.value = "offline";
+            return;
+        }
         if (!r.ok) throw new Error("status " + r.status);
         status = await r.json();
     } catch (_) {
@@ -109,6 +128,10 @@ export async function submitPassword(password) {
         authError.value = "Wrong password.";
         return false;
     }
+    if (await isCrossSite(r)) {
+        authError.value = CROSS_SITE_HELP;
+        return false;
+    }
     if (r.status === 409) {           // no password set — flip to setup card
         authState.value = "needsSetup";
         return false;
@@ -151,6 +174,10 @@ export async function submitSetup(password, confirm) {
     }
     if (r.status === 403) {
         const why = await r.json().then(d => d && d.error).catch(() => "");
+        if (why === "cross_site") {     // not the hub's own address: say how to reach it
+            authError.value = CROSS_SITE_HELP;
+            return false;
+        }
         if (why === "setup_closed") {   // the ten-minute window ran out
             setupSecsLeft.value = 0;
             authState.value = "setupClosed";

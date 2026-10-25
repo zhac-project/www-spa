@@ -13,7 +13,7 @@ import { Spinner } from "./components/Spinner.jsx";
 import { BrandHero } from "./components/BrandHero.jsx";
 import markUrl from "./assets/brand/zhac-mark.png";
 import { Login } from "./pages/Login.jsx";
-import { authState, probeAuth } from "./stores/auth.js";
+import { authState, authError, probeAuth } from "./stores/auth.js";
 
 import { InfoPage }         from "./pages/Info.jsx";
 import { DevicesPage }      from "./pages/Devices.jsx";
@@ -93,7 +93,7 @@ export function App() {
     if (st === "offline") {
         return (
             <Splash>
-                <p class="error-text">Can’t reach the controller.</p>
+                <p class="error-text">{authError.value || "Can’t reach the controller."}</p>
                 <button class="primary" onClick={() => probeAuth()}>Retry</button>
             </Splash>
         );

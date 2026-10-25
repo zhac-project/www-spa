@@ -81,7 +81,11 @@ export function SettingsPage() {
         } catch (e) { showToast("Failed: " + e.message, "err"); }
     }
     async function doZigbeeReset() {
-        if (!confirm(`WARNING: erase ALL paired devices, rules, and scripts from the ${chipWord}?`)) return;
+        // A wired hub keeps settings, rules and scripts: only the network and its devices go (PB-06).
+        const what = kind === "wired"
+            ? "form a new Zigbee network? Every paired device is forgotten and must be paired again; settings, rules, scripts and sign-in stay."
+            : `erase ALL paired devices, rules, and scripts from the ${chipWord}?`;
+        if (!confirm(`WARNING: ${what}`)) return;
         try { await call("zigbee.reset"); showToast("Reset — rebooting", "ok"); }
         catch (e) { showToast("Failed: " + e.message, "err"); }
     }
@@ -296,7 +300,9 @@ export function SettingsPage() {
                     <p class="field-hint">Channel + key changes apply after factory reset.</p>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
                     <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
-                        Erase all paired devices, rules, and scripts from the {chipWord}. The coordinator will reboot.
+                        {kind === "wired"
+                            ? "A new Zigbee network with new keys: every paired device is forgotten and must be paired again. Settings, rules, scripts and sign-in stay. The hub restarts."
+                            : `Erase all paired devices, rules, and scripts from the ${chipWord}. The coordinator will reboot.`}
                     </p>
                     <button class="danger small" onClick={doZigbeeReset}>Factory reset {chipWord === "P4" ? "P4" : "Zigbee"}</button>
                 </Card>

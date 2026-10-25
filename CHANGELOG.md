@@ -10,6 +10,8 @@ across the ZHAC platform.
 
 ### Fixed
 
+- **Settings → Zigbee: the network reset says what it does on a wired hub** (firmware review 2026-10-24 PB-06): zhac-wired-core now performs `zigbee.reset` (a new network with new keys; every device must be paired again, settings, rules, scripts and sign-in stay). The warning and the hint said all rules and scripts would be erased too; on a wired hub they now say what really goes. The dual-chip text is unchanged.
+
 - **"Too many wrong passwords" instead of "Login failed (429)"** (`stores/auth.js`, Settings → change password). zhac-wired-core now answers a peer, or the hub as a whole, that keeps entering wrong passwords with 429 for a minute (firmware review 2026-10-24 HS-06); the sign-in card and the password change say to wait a minute.
 
 - **A hub that refuses the page's address says how to reach it** (`stores/auth.js`, `app.jsx`). zhac-wired-core now refuses requests that do not come from its own page (firmware review 2026-10-24 HS-01): with sign-in off it answers only at its IP address or `<name>.local`, and the first password set-up does the same. Its 403 `cross_site` on status, login or setup used to read as "Can't reach the controller" or "A password was already set"; the page now says to open the hub at its IP address or `.local` name, and that a reverse proxy in front of it must pass the Host header through.

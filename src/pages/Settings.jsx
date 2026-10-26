@@ -14,6 +14,7 @@ import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
 import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
+import { cleartextCredentials, isTlsUrl, normalizePin, brokerPatch } from "../mqtt_url.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
 
 export function SettingsPage() {
@@ -94,11 +95,19 @@ export function SettingsPage() {
     const [brokerUrl, setBrokerUrl] = useState(d.mqtt_broker || "");
     const [mqttRoot,  setMqttRoot]  = useState(d.mqtt_root_topic || "");
     const [haPrefix,  setHaPrefix]  = useState(d.ha_prefix || "");
+    const [tlsPin,    setTlsPin]    = useState(d.mqtt_tls_pin || "");
     useEffect(() => {
         if (d.mqtt_broker != null && !brokerUrl)  setBrokerUrl(d.mqtt_broker);
         if (d.mqtt_root_topic != null && !mqttRoot) setMqttRoot(d.mqtt_root_topic);
         if (d.ha_prefix != null && !haPrefix) setHaPrefix(d.ha_prefix);
-    }, [d.mqtt_broker, d.mqtt_root_topic, d.ha_prefix]);
+        if (d.mqtt_tls_pin != null && !tlsPin) setTlsPin(d.mqtt_tls_pin);
+    }, [d.mqtt_broker, d.mqtt_root_topic, d.ha_prefix, d.mqtt_tls_pin]);
+    // Review HS-13: a pin for a broker with its own or a self-signed certificate (hubs that report one),
+    // and a warning when the address sends the user name and password in clear.
+    const pinSupported = d.mqtt_tls_pin !== undefined;
+    const pinBad = pinSupported && normalizePin(tlsPin) === null;
+    const cleartext = cleartextCredentials(brokerUrl) ||
+        (brokerUrl === (d.mqtt_broker || "") && d.mqtt_cleartext_credentials === true);
     // Firmwares without the Home Assistant bridge do not report the field.
     const haSupported = d.ha_discovery !== undefined;
 
@@ -211,6 +220,35 @@ export function SettingsPage() {
                     </div>
                     <label>Broker URL<input type="text" value={brokerUrl}
                                             onInput={(e) => setBrokerUrl(e.currentTarget.value)} /></label>
+                    {d.mqtt_broker && (
+                        <p class="field-hint">
+                            The saved address is shown without its user name and password. They are kept unless
+                            you type a new address.
+                        </p>
+                    )}
+                    {cleartext && (
+                        <p class="field-hint">
+                            <Badge kind="warn">Unencrypted</Badge> This address sends the broker's user name and
+                            password in clear: anyone on your network can read them, and with them control your
+                            devices through the broker. Use <code>mqtts://</code> instead
+                            {pinSupported ? "; a broker with its own or a self-signed certificate works with its fingerprint below." : "."}
+                        </p>
+                    )}
+                    {pinSupported && (isTlsUrl(brokerUrl) || tlsPin) && (
+                        <>
+                            <label>Broker certificate fingerprint (SHA-256, optional)
+                                <input type="text" value={tlsPin} placeholder="AB:CD:EF:…" spellcheck={false}
+                                       onInput={(e) => setTlsPin(e.currentTarget.value)} />
+                            </label>
+                            <p class="field-hint">
+                                {pinBad
+                                    ? "Not a SHA-256 fingerprint: 64 hex digits, colons allowed."
+                                    : <>For a broker with its own or a self-signed certificate: the hub then trusts that
+                                      certificate only, whoever signed it. <code>openssl x509 -noout -fingerprint -sha256 -in
+                                      broker.crt</code> prints it. Empty: the usual certificate authorities.</>}
+                            </p>
+                        </>
+                    )}
                     <label>Root topic<input type="text" value={mqttRoot}
                                             onInput={(e) => setMqttRoot(e.currentTarget.value)} /></label>
                     {haSupported && (
@@ -232,10 +270,11 @@ export function SettingsPage() {
                             </p>
                         </>
                     )}
-                    <button class="primary small"
-                            onClick={() => writeSettings(haSupported
-                                ? { broker_url: brokerUrl, mqtt_root_topic: mqttRoot, ha_prefix: haPrefix || "homeassistant" }
-                                : { broker_url: brokerUrl, mqtt_root_topic: mqttRoot }, "MQTT saved")}>
+                    <button class="primary small" disabled={pinBad}
+                            onClick={() => writeSettings({
+                                ...brokerPatch(d, brokerUrl, mqttRoot, tlsPin),
+                                ...(haSupported ? { ha_prefix: haPrefix || "homeassistant" } : {}),
+                            }, "MQTT saved")}>
                         Save
                     </button>
                 </Card>

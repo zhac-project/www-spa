@@ -27,7 +27,7 @@ import { showToast, withToast } from "../stores/ui.js";
 import { Card } from "../components/Card.jsx";
 import { fmtBytes } from "../utils.js";
 import { LINKS } from "../links.js";
-import { fetchReleases, chipToken, compareBuild, parseTag } from "../releases.js";
+import { fetchReleases, chipToken, compareBuild, tagOrder } from "../releases.js";
 
 const RELEASES = LINKS.releases;
 const FLASHER = LINKS.flasher;
@@ -90,7 +90,7 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
         setBusy(false);
     }
 
-    const devBuild = !!installed && parseTag(installed) == null;
+    const devBuild = !!installed && tagOrder(installed) == null;
     return (
         <Card title={`${chipLabel} — available versions`}>
             <p class="muted">

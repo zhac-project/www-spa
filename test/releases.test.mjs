@@ -1,7 +1,7 @@
 // node --test test/  -- pure functions behind the OTA version picker.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assetMatches, chipToken, compareBuild, fetchReleases, parseTag } from "../src/releases.js";
+import { assetMatches, chipToken, compareBuild, fetchReleases, tagOrder } from "../src/releases.js";
 
 test("chipToken strips the esp32 prefix", () => {
     assert.equal(chipToken("esp32p4"), "p4");
@@ -48,15 +48,30 @@ test("assetMatches: the product prefix follows the hub kind", () => {
     assert.equal(assetMatches("zhac-wired-p4-rev1x-v2026100302-ota.bin", { chip: "p4", revision: 130 }), false, "no kind, no match");
 });
 
-test("parseTag / compareBuild", () => {
-    assert.equal(parseTag("v2026091901"), 2026091901);
-    assert.equal(parseTag("2026091901"), 2026091901);
-    assert.equal(parseTag("v2026091901-3-gabc123"), null, "developer build");
-    assert.equal(parseTag("abc1234"), null);
+test("tagOrder / compareBuild", () => {
+    assert.equal(tagOrder("v2026091901"), 2026091901999);
+    assert.equal(tagOrder("2026091901"), 2026091901999);
+    assert.equal(tagOrder("v2026091901-3-gabc123"), null, "developer build");
+    assert.equal(tagOrder("abc1234"), null);
     assert.equal(compareBuild("v2026091901", "v2026091901"), "installed");
     assert.equal(compareBuild("v2026091901", "v2026092001"), "newer");
     assert.equal(compareBuild("v2026092001", "v2026091901"), "older");
     assert.equal(compareBuild("abc1234-dirty", "v2026091901"), "unknown");
+});
+
+// A pre-release vYYYYMMDDVV-rcN comes before its release, on the page as on the hub (ota_image.h): an
+// older one is "older" and asks first, like an older release (review LOW M3).
+test("compareBuild: pre-releases", () => {
+    assert.equal(compareBuild("v2026102501", "v2026100301-rc1"), "older");
+    assert.equal(compareBuild("v2026102501", "v2026102501-rc2"), "older", "the installed release's own rc");
+    assert.equal(compareBuild("v2026102501-rc2", "v2026102501"), "newer");
+    assert.equal(compareBuild("v2026102501-rc2", "v2026102501-rc1"), "older");
+    assert.equal(compareBuild("v2026102501-rc1", "v2026102501-rc1"), "installed");
+    assert.equal(compareBuild("v2026102501-rc1", "v2026102601-rc1"), "newer");
+    assert.equal(compareBuild("v2026100301-rc1-4-gabc1234", "v2026091901"), "unknown", "developer build on an rc tag");
+    assert.equal(compareBuild("v2026102501", "v2026102501-rc100"), "unknown", "not a pre-release tag");
+    assert.equal(tagOrder("v2026102501-rc1") < tagOrder("v2026102501"), true);
+    assert.equal(tagOrder("v2026102501-rc"), null);
 });
 
 test("fetchReleases keeps only releases with a fitting asset, newest first", async () => {

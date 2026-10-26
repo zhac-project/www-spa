@@ -32,19 +32,21 @@ test("normalizePin: as openssl prints it, or bare hex; null when it is not one",
     assert.equal(normalizePin("g" + hex.slice(1)), null, "not hex");
 });
 
-// The status reports the broker URL without its user name and password. Saving the card must not send
-// that stripped URL back: it would replace the stored one and lose the credentials.
-test("brokerPatch: the URL goes only when it was changed", () => {
+// The status reports the broker URL without its user name and password; the hub keeps the stored ones
+// when that address comes back (zhac-components mqtt_gw_url.h), so Save always sends it and reconnects.
+test("brokerPatch: the address always goes, the pin only when it changed", () => {
     const d = { mqtt_broker: "mqtt://broker:1883", mqtt_tls_pin: "" };
-    assert.deepEqual(brokerPatch(d, "mqtt://broker:1883", "zhac", ""), { mqtt_root_topic: "zhac" });
+    assert.deepEqual(brokerPatch(d, "mqtt://broker:1883", "zhac", ""),
+        { broker_url: "mqtt://broker:1883", mqtt_root_topic: "zhac" });
     assert.deepEqual(brokerPatch(d, "mqtt://u:p@broker:1883", "zhac", ""),
         { broker_url: "mqtt://u:p@broker:1883", mqtt_root_topic: "zhac" });
     const hex = "ab".repeat(32);
-    assert.deepEqual(brokerPatch(d, "mqtt://broker:1883", "zhac", hex), { mqtt_root_topic: "zhac", mqtt_tls_pin: hex });
-    assert.deepEqual(brokerPatch({ ...d, mqtt_tls_pin: hex }, "mqtt://broker:1883", "zhac", hex), { mqtt_root_topic: "zhac" },
+    const url = "mqtt://broker:1883";
+    assert.deepEqual(brokerPatch(d, url, "zhac", hex), { broker_url: url, mqtt_root_topic: "zhac", mqtt_tls_pin: hex });
+    assert.deepEqual(brokerPatch({ ...d, mqtt_tls_pin: hex }, url, "zhac", hex), { broker_url: url, mqtt_root_topic: "zhac" },
         "an unchanged pin is not sent");
-    assert.deepEqual(brokerPatch({ ...d, mqtt_tls_pin: hex }, "mqtt://broker:1883", "zhac", ""),
-        { mqtt_root_topic: "zhac", mqtt_tls_pin: "" }, "clearing it is sent");
-    assert.deepEqual(brokerPatch({ mqtt_broker: "mqtt://b" }, "mqtt://b", "zhac", "ab"), { mqtt_root_topic: "zhac" },
+    assert.deepEqual(brokerPatch({ ...d, mqtt_tls_pin: hex }, url, "zhac", ""),
+        { broker_url: url, mqtt_root_topic: "zhac", mqtt_tls_pin: "" }, "clearing it is sent");
+    assert.deepEqual(brokerPatch({ mqtt_broker: "mqtt://b" }, "mqtt://b", "zhac", "ab"), { broker_url: "mqtt://b", mqtt_root_topic: "zhac" },
         "a hub that does not report a pin never gets one");
 });

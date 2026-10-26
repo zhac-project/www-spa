@@ -25,13 +25,12 @@ export function normalizePin(s) {
     return /^[0-9a-f]{64}$/.test(t) ? t : null;
 }
 
-// What Save sends. The status reports the broker URL without its user name and password, so the URL goes
-// only when it was changed: sending the stripped one back replaced the stored URL and lost them. The pin
-// goes only to a hub that reports one (wired, single-chip), and only when it changed.
+// What Save sends. The status reports the broker URL without its user name and password; the hub keeps
+// the stored ones when it gets that address back (zhac-components mqtt_gw_url.h), and a save of the same
+// address reconnects. The pin goes only to a hub that reports one (wired, single-chip), and only when it
+// changed.
 export function brokerPatch(d, url, root, pinInput) {
-    const patch = {};
-    if (url !== (d.mqtt_broker || "")) patch.broker_url = url;
-    patch.mqtt_root_topic = root;
+    const patch = { broker_url: url, mqtt_root_topic: root };
     if (d.mqtt_tls_pin !== undefined) {
         const pin = normalizePin(pinInput);
         if (pin !== null && pin !== (d.mqtt_tls_pin || "")) patch.mqtt_tls_pin = pin;

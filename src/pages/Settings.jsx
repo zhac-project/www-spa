@@ -130,23 +130,30 @@ export function SettingsPage() {
             {d.storage_error && (
                 <Card title="Storage error">
                     <p>
-                        The hub could not use its storage when it started, so devices, rules,
-                        names and passwords could not be read. <strong>Nothing was erased.</strong>{" "}
-                        Sign-in works only with the token printed on the serial console.
+                        The hub could not read all of its storage when it started, so devices,
+                        rules or names may be missing. <strong>Nothing was erased.</strong>
+                        {d.auth_storage_error && " Sign-in works only with the token printed on the serial console."}
+                    </p>
+                    <p>
+                        <strong>Restart the hub first.</strong> A read error that lasts one start
+                        often clears at the next. Erase only if this card comes back.
                     </p>
                     <p class="muted">
                         Erasing storage gives you a fresh hub: pair the devices again, then restore
                         your last backup for names, rules and scripts. The Zigbee network keys are
                         lost with the erase, so every device must pair again.
                     </p>
-                    <button class="danger small"
-                            onClick={async () => {
-                                if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
-                                try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
-                                catch (e) { showToast("Erase failed: " + e.message, "err"); }
-                            }}>
-                        Erase storage and restart
-                    </button>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        {d.restart && <RestartHubButton />}
+                        <button class="danger small"
+                                onClick={async () => {
+                                    if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
+                                    try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
+                                    catch (e) { showToast("Erase failed: " + e.message, "err"); }
+                                }}>
+                            Erase storage and restart
+                        </button>
+                    </div>
                 </Card>
             )}
             <div class="cards">

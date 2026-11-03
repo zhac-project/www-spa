@@ -14,6 +14,7 @@ import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
 import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
+import { cleartextCredentials, isTlsUrl, normalizePin, brokerPatch } from "../mqtt_url.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
 
 export function SettingsPage() {
@@ -81,7 +82,11 @@ export function SettingsPage() {
         } catch (e) { showToast("Failed: " + e.message, "err"); }
     }
     async function doZigbeeReset() {
-        if (!confirm(`WARNING: erase ALL paired devices, rules, and scripts from the ${chipWord}?`)) return;
+        // A wired hub keeps settings, rules and scripts: only the network and its devices go (PB-06).
+        const what = kind === "wired"
+            ? "form a new Zigbee network? Every paired device is forgotten and must be paired again; settings, rules, scripts and sign-in stay."
+            : `erase ALL paired devices, rules, and scripts from the ${chipWord}?`;
+        if (!confirm(`WARNING: ${what}`)) return;
         try { await call("zigbee.reset"); showToast("Reset — rebooting", "ok"); }
         catch (e) { showToast("Failed: " + e.message, "err"); }
     }
@@ -90,11 +95,19 @@ export function SettingsPage() {
     const [brokerUrl, setBrokerUrl] = useState(d.mqtt_broker || "");
     const [mqttRoot,  setMqttRoot]  = useState(d.mqtt_root_topic || "");
     const [haPrefix,  setHaPrefix]  = useState(d.ha_prefix || "");
+    const [tlsPin,    setTlsPin]    = useState(d.mqtt_tls_pin || "");
     useEffect(() => {
         if (d.mqtt_broker != null && !brokerUrl)  setBrokerUrl(d.mqtt_broker);
         if (d.mqtt_root_topic != null && !mqttRoot) setMqttRoot(d.mqtt_root_topic);
         if (d.ha_prefix != null && !haPrefix) setHaPrefix(d.ha_prefix);
-    }, [d.mqtt_broker, d.mqtt_root_topic, d.ha_prefix]);
+        if (d.mqtt_tls_pin != null && !tlsPin) setTlsPin(d.mqtt_tls_pin);
+    }, [d.mqtt_broker, d.mqtt_root_topic, d.ha_prefix, d.mqtt_tls_pin]);
+    // Review HS-13: a pin for a broker with its own or a self-signed certificate (hubs that report one),
+    // and a warning when the address sends the user name and password in clear.
+    const pinSupported = d.mqtt_tls_pin !== undefined;
+    const pinBad = pinSupported && normalizePin(tlsPin) === null;
+    const cleartext = cleartextCredentials(brokerUrl) ||
+        (brokerUrl === (d.mqtt_broker || "") && d.mqtt_cleartext_credentials === true);
     // Firmwares without the Home Assistant bridge do not report the field.
     const haSupported = d.ha_discovery !== undefined;
 
@@ -117,23 +130,30 @@ export function SettingsPage() {
             {d.storage_error && (
                 <Card title="Storage error">
                     <p>
-                        The hub could not use its storage when it started, so devices, rules,
-                        names and passwords could not be read. <strong>Nothing was erased.</strong>{" "}
-                        Sign-in works only with the token printed on the serial console.
+                        The hub could not read all of its storage when it started, so devices,
+                        rules or names may be missing. <strong>Nothing was erased.</strong>
+                        {d.auth_storage_error && " Sign-in works only with the token printed on the serial console."}
+                    </p>
+                    <p>
+                        <strong>Restart the hub first.</strong> A read error that lasts one start
+                        often clears at the next. Erase only if this card comes back.
                     </p>
                     <p class="muted">
                         Erasing storage gives you a fresh hub: pair the devices again, then restore
                         your last backup for names, rules and scripts. The Zigbee network keys are
                         lost with the erase, so every device must pair again.
                     </p>
-                    <button class="danger small"
-                            onClick={async () => {
-                                if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
-                                try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
-                                catch (e) { showToast("Erase failed: " + e.message, "err"); }
-                            }}>
-                        Erase storage and restart
-                    </button>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        {d.restart && <RestartHubButton />}
+                        <button class="danger small"
+                                onClick={async () => {
+                                    if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
+                                    try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
+                                    catch (e) { showToast("Erase failed: " + e.message, "err"); }
+                                }}>
+                            Erase storage and restart
+                        </button>
+                    </div>
                 </Card>
             )}
             <div class="cards">
@@ -207,6 +227,35 @@ export function SettingsPage() {
                     </div>
                     <label>Broker URL<input type="text" value={brokerUrl}
                                             onInput={(e) => setBrokerUrl(e.currentTarget.value)} /></label>
+                    {d.mqtt_broker && (
+                        <p class="field-hint">
+                            The saved address is shown without its user name and password. They are kept unless
+                            you type a new address.
+                        </p>
+                    )}
+                    {cleartext && (
+                        <p class="field-hint">
+                            <Badge kind="warn">Unencrypted</Badge> This address sends the broker's user name and
+                            password in clear: anyone on your network can read them, and with them control your
+                            devices through the broker. Use <code>mqtts://</code> instead
+                            {pinSupported ? "; a broker with its own or a self-signed certificate works with its fingerprint below." : "."}
+                        </p>
+                    )}
+                    {pinSupported && (isTlsUrl(brokerUrl) || tlsPin) && (
+                        <>
+                            <label>Broker certificate fingerprint (SHA-256, optional)
+                                <input type="text" value={tlsPin} placeholder="AB:CD:EF:…" spellcheck={false}
+                                       onInput={(e) => setTlsPin(e.currentTarget.value)} />
+                            </label>
+                            <p class="field-hint">
+                                {pinBad
+                                    ? "Not a SHA-256 fingerprint: 64 hex digits, colons allowed."
+                                    : <>For a broker with its own or a self-signed certificate: the hub then trusts that
+                                      certificate only, whoever signed it. <code>openssl x509 -noout -fingerprint -sha256 -in
+                                      broker.crt</code> prints it. Empty: the usual certificate authorities.</>}
+                            </p>
+                        </>
+                    )}
                     <label>Root topic<input type="text" value={mqttRoot}
                                             onInput={(e) => setMqttRoot(e.currentTarget.value)} /></label>
                     {haSupported && (
@@ -228,10 +277,11 @@ export function SettingsPage() {
                             </p>
                         </>
                     )}
-                    <button class="primary small"
-                            onClick={() => writeSettings(haSupported
-                                ? { broker_url: brokerUrl, mqtt_root_topic: mqttRoot, ha_prefix: haPrefix || "homeassistant" }
-                                : { broker_url: brokerUrl, mqtt_root_topic: mqttRoot }, "MQTT saved")}>
+                    <button class="primary small" disabled={pinBad}
+                            onClick={() => writeSettings({
+                                ...brokerPatch(d, brokerUrl, mqttRoot, tlsPin),
+                                ...(haSupported ? { ha_prefix: haPrefix || "homeassistant" } : {}),
+                            }, "MQTT saved")}>
                         Save
                     </button>
                 </Card>
@@ -296,7 +346,9 @@ export function SettingsPage() {
                     <p class="field-hint">Channel + key changes apply after factory reset.</p>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
                     <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
-                        Erase all paired devices, rules, and scripts from the {chipWord}. The coordinator will reboot.
+                        {kind === "wired"
+                            ? "A new Zigbee network with new keys: every paired device is forgotten and must be paired again. Settings, rules, scripts and sign-in stay. The hub restarts."
+                            : `Erase all paired devices, rules, and scripts from the ${chipWord}. The coordinator will reboot.`}
                     </p>
                     <button class="danger small" onClick={doZigbeeReset}>Factory reset {chipWord === "P4" ? "P4" : "Zigbee"}</button>
                 </Card>
@@ -1266,6 +1318,7 @@ function ChangePasswordCard() {
         }
         setBusy(false);
         if (r.status === 401) { showToast("Current password is wrong", "err"); return; }
+        if (r.status === 429) { showToast("Too many wrong passwords — wait a minute, then try again", "err"); return; }
         if (!r.ok)            { showToast("Change failed (" + r.status + ")", "err"); return; }
         const data = await r.json().catch(() => null);
         if (data && data.token) {

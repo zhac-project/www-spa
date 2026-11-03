@@ -52,7 +52,7 @@ export const ZHAC_API = [
     {
         "label": "zhac.publish",
         "detail": "(topic, payload [, qos [, retain]])",
-        "info": "Publish to the MQTT broker via mqtt_gw_publish. No-op if the gateway isn't connected (no return value surfaces that state — use GET /api/status / the WebUI to confirm MQTT)."
+        "info": "Publish to the MQTT broker via mqtt_gw_publish. No-op if the gateway isn't connected (no return value surfaces that state — use GET /api/status with the API token, or the WebUI, to"
     },
     {
         "label": "zhac.set_attr",

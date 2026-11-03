@@ -27,7 +27,7 @@ import { showToast, withToast } from "../stores/ui.js";
 import { Card } from "../components/Card.jsx";
 import { fmtBytes } from "../utils.js";
 import { LINKS } from "../links.js";
-import { fetchReleases, chipToken, compareBuild, parseTag } from "../releases.js";
+import { fetchReleases, chipToken, compareBuild, tagOrder } from "../releases.js";
 
 const RELEASES = LINKS.releases;
 const FLASHER = LINKS.flasher;
@@ -63,6 +63,13 @@ function looksLikeBinUrl(url) {
 
 const RELATION = { installed: "Installed", newer: "Newer", older: "Older", unknown: "" };
 
+// A wired hub installs an older release only when asked to (firmware review
+// 2026-10-24 HS-10); the confirm says what that can cost.
+const OLDER_RISK = "may lack fixes and may not read everything this version saved; if devices are " +
+                   "missing afterwards, update again.";
+const OLDER_TEXT = `\n\nThis is an older release than the one installed. It ${OLDER_RISK}`;
+const OLDER_URL_TEXT = `\n\nIf this is an older release than the one installed, it ${OLDER_RISK}`;   // its version is unknown here
+
 // Published versions that fit one chip, with an Install button each.
 // `hub` = { chip, revision }; `installed` = the version the chip reports.
 function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall, busy, setBusy, target }) {
@@ -76,14 +83,14 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
         return () => { alive = false; };
     }, [kind, hub.chip, hub.revision]);
 
-    async function install(rel, asset) {
-        if (!confirm(`Install ${rel.tag} on the ${chipLabel}?\n\n${confirmText}`)) return;
+    async function install(rel, asset, older) {
+        if (!confirm(`Install ${rel.tag} on the ${chipLabel}?\n\n${confirmText}${older ? OLDER_TEXT : ""}`)) return;
         setBusy(true);
-        await withToast(() => onInstall(asset.url), `Update to ${rel.tag} started`, "Update failed");
+        await withToast(() => onInstall(asset.url, older), `Update to ${rel.tag} started`, "Update failed");
         setBusy(false);
     }
 
-    const devBuild = !!installed && parseTag(installed) == null;
+    const devBuild = !!installed && tagOrder(installed) == null;
     return (
         <Card title={`${chipLabel} — available versions`}>
             <p class="muted">
@@ -125,7 +132,7 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
                                     </td>
                                     <td>
                                         <button class="small primary" disabled={busy || rel8n === "installed"}
-                                                onClick={() => install(rel, asset)}>
+                                                onClick={() => install(rel, asset, rel8n === "older")}>
                                             {rel8n === "installed" ? "Installed" : "Install"}
                                         </button>
                                     </td>
@@ -140,8 +147,10 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
     );
 }
 
-function UrlForm({ label, placeholder, busy, onFlash }) {
+// `olderOption`: offer "Allow an older version" (wired hubs check the version).
+function UrlForm({ label, placeholder, busy, onFlash, olderOption }) {
     const [url, setUrl] = useState("");
+    const [older, setOlder] = useState(false);
     return (
         <>
             <label class="field">
@@ -149,8 +158,14 @@ function UrlForm({ label, placeholder, busy, onFlash }) {
                 <input type="url" placeholder={placeholder} value={url}
                        onInput={e => setUrl(e.currentTarget.value)} disabled={busy} />
             </label>
+            {olderOption && (
+                <label class="field">
+                    <span><input type="checkbox" checked={older} disabled={busy}
+                                 onChange={e => setOlder(e.currentTarget.checked)} /> Allow an older version</span>
+                </label>
+            )}
             <div class="btn-strip">
-                <button onClick={() => onFlash(url.trim())} disabled={busy || !url.trim()}>Install from URL</button>
+                <button onClick={() => onFlash(url.trim(), older)} disabled={busy || !url.trim()}>Install from URL</button>
             </div>
         </>
     );
@@ -170,14 +185,14 @@ function SingleChipOta({ kind }) {
     const confirmText = "The hub downloads the image, reboots into it and comes back in " +
                         "about a minute. Devices, rules and scripts are kept.";
 
-    async function doFlash(u) {
+    async function doFlash(u, older) {
         if (!looksLikeBinUrl(u)) {
             showToast("URL must be http(s) and end in .bin", "err");
             return;
         }
-        if (!confirm(`Update the ${chip} firmware from this URL?\n\n${confirmText}`)) return;
+        if (!confirm(`Update the ${chip} firmware from this URL?\n\n${confirmText}${older ? OLDER_URL_TEXT : ""}`)) return;
         setBusy(true);
-        await withToast(() => triggerOtaSelf(u), "Update started", "Update failed");
+        await withToast(() => triggerOtaSelf(u, older), "Update started", "Update failed");
         setBusy(false);
     }
 
@@ -203,10 +218,10 @@ function SingleChipOta({ kind }) {
             {d.ota_state === "pending" && (
                 <div class="card clock-unset" role="status">
                     <p><strong>The new firmware is on trial.</strong> The hub keeps it once its
-                    storage, web server and Zigbee radio check out, which takes under a minute
-                    on a healthy hub. If that does not happen within ten minutes it goes back
-                    to the previous version by itself. Wait for the trial to end before
-                    starting another update.</p>
+                    storage, web server and Zigbee radio have stayed healthy for five minutes in
+                    a row. If that does not happen within ten minutes, or the hub restarts before
+                    then, it goes back to the previous version by itself. Wait for the trial to
+                    end before starting another update.</p>
                 </div>
             )}
             {d.ota_rollback_reason && (
@@ -227,7 +242,7 @@ function SingleChipOta({ kind }) {
                     (not the full-flash image); the hub downloads it itself, so the URL must be
                     reachable from its network.
                 </p>
-                <UrlForm label="Firmware URL" busy={busy} onFlash={doFlash}
+                <UrlForm label="Firmware URL" busy={busy} onFlash={doFlash} olderOption={kind === "wired"}
                          placeholder="https://…/zhac-wired-p4-rev1x-v2026….-ota.bin" />
             </details>
             <Card title="What survives an update">

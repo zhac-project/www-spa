@@ -50,18 +50,20 @@ export function assetMatches(name, { kind, chip, revision } = {}) {
     return revision >= lower && revision < upper;
 }
 
-// vYYYYMMDDVV -> 2026091901, anything else -> null. A `git describe` string
-// with commits on top ("v2026091901-3-gabc123") is NOT a release.
-export function parseTag(s) {
-    const m = /^v?(\d{10})$/.exec(String(s || "").trim());
-    return m ? Number(m[1]) : null;
+// Orders releases and pre-releases: a pre-release vYYYYMMDDVV-rcN (N one or two
+// digits) comes before its release vYYYYMMDDVV, as on the hub (zhac-wired-core
+// main/ota_image.h). null for anything else: a `git describe` string with
+// commits on top ("v2026091901-3-gabc123") is a developer build, not a release.
+export function tagOrder(s) {
+    const m = /^v?(\d{10})(?:-rc(\d{1,2}))?$/.exec(String(s || "").trim());
+    return m ? Number(m[1]) * 1000 + (m[2] === undefined ? 999 : Number(m[2])) : null;
 }
 
 // How a release relates to what the hub runs:
 //   "installed" same version; "newer"/"older" than the hub's; "unknown" when
-//   the hub's version is not a release tag (a developer build).
+//   either is neither a release nor a pre-release tag (a developer build).
 export function compareBuild(installed, tag) {
-    const a = parseTag(installed), b = parseTag(tag);
+    const a = tagOrder(installed), b = tagOrder(tag);
     if (a == null || b == null) return "unknown";
     if (a === b) return "installed";
     return b > a ? "newer" : "older";

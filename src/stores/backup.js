@@ -69,11 +69,13 @@ export async function restoreBackup(b) {
         const same = here.find((x) => x.name === r.name);
         try {
             if (same) await call("rule.update", { id: same.id, name: r.name, dsl: r.dsl });
-            else      await call("rule.create", { name: r.name, dsl: r.dsl });
+            // A hub that takes `enabled` creates an Off rule Off, never live; an older
+            // one ignores it and the pass below switches it off (review 2026-10-28 R-08).
+            else      await call("rule.create", { name: r.name, dsl: r.dsl, enabled: r.enabled !== false });
             out.rules++;
         } catch (e) { out.skipped.push(`rule "${r.name}": ${e.message}`); }
     }
-    here = rows(await call("rule.list"), "rules");      // new rules are enabled: apply the saved state
+    here = rows(await call("rule.list"), "rules");      // updated rules, and older hubs' new ones: apply the saved state
     for (const r of b.rules || []) {
         const now = here.find((x) => x.name === r.name);
         if (now && (now.enabled !== false) !== r.enabled) {

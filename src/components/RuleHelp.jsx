@@ -43,7 +43,13 @@ publish <topic> <payload>              // MQTT publish
 event <name>                           // fire internal event
 timer <index> <ms>                     // start countdown (ms 0 = stop it)
 log <message>                          // serial log (INFO)
-script.run "<name>"                    // run /scripts/<name>.lua`}</pre>
+script.run "<name>"                    // run /scripts/<name>.lua
+gpio.set <pin> on|off                  // drive a pin set up as out (Settings › I/O)
+gpio.toggle <pin>                      // flip an out pin
+pwm.set <pin> <0-100>                  // duty in percent for a pwm pin`}</pre>
+            <p class="field-hint"><code>&lt;pin&gt;</code> is the name from Settings › I/O or the GPIO number.
+            Inputs and ADC pins are triggers on the Hub I/O device:
+            <code>ON Hub I/O#button=1 DO gpio.toggle relay ENDON</code></p>
             <p class="field-hint">Device names in actions are a single token, no quotes — rename
             devices with spaces (e.g. <code>kitchen_light</code>) or use the IEEE address.</p>
 

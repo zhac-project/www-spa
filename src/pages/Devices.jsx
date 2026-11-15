@@ -7,7 +7,7 @@ import { signal } from "@preact/signals";
 import { devices, bootstrapDevices, deleteDevice } from "../stores/devices.js";
 import { call } from "../ws/client.js";
 import { navigate, showToast, hrefFor } from "../stores/ui.js";
-import { fmtSince, hex16 } from "../utils.js";
+import { fmtSince, hex16, isLocal } from "../utils.js";
 import { deviceMatchesFilter } from "../utils/deviceFilter.js";
 import { LINKS } from "../links.js";
 import { status } from "../stores/status.js";
@@ -352,8 +352,8 @@ export function DevicesPage() {
                                     <div class="act-group">
                                         <button class="act-btn edit" title="Details" aria-label={`Details of ${d.name || d.ieee}`}
                                                 onClick={() => navigate("device", { ieee: d.ieee })}>✎</button>
-                                        <button class="act-btn del" title="Remove" aria-label={`Remove ${d.name || d.ieee}`}
-                                                onClick={() => confirmRemove(d.ieee)}>🗑</button>
+                                        {!isLocal(d) && <button class="act-btn del" title="Remove" aria-label={`Remove ${d.name || d.ieee}`}
+                                                onClick={() => confirmRemove(d.ieee)}>🗑</button>}
                                     </div>
                                 </td>
                             </tr>

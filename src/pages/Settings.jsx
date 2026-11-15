@@ -10,6 +10,7 @@ import { ui, showToast, withToast, SUCCESS, navigate, themeMode, setTheme } from
 import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores/rainmaker.js";
 import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
+import { IoCard } from "./IoCard.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
@@ -400,6 +401,8 @@ export function SettingsPage() {
                 </Card>
 
                 {d.auth_enabled && <ChangePasswordCard />}
+
+                <IoCard />
 
                 <BackupCard status={d} />
 

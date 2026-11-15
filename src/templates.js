@@ -22,6 +22,8 @@ export const RULE_TEMPLATES = [
       dsl: "ON LEAK_SENSOR#water_leak=1 DO zigbee.set WATER_VALVE state 0 ; publish home/alert water_leak ENDON" },
     { name: "Too hot: MQTT alert above 28 °C",
       dsl: "ON TEMP_SENSOR#temperature>2800 DO publish home/alert too_hot ENDON" },
+    { name: "Hub input toggles a relay (Settings › I/O)",
+      dsl: "ON Hub I/O#button=1 DO gpio.toggle relay ENDON" },
 ];
 
 export const SCRIPT_TEMPLATES = [

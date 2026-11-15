@@ -93,3 +93,7 @@ export function heldText(name) {
         (name ? `, the last time while loading "${name}". Fix or delete that script, then press Apply.`
               : ". Fix or delete the script that crashed it, then press Apply.");
 }
+
+// The Hub I/O device (and any future firmware-local one) is not a Zigbee node:
+// the device row / device.get carries `local: true` and Zigbee-only controls are hidden.
+export const isLocal = (dev) => !!(dev && dev.local);

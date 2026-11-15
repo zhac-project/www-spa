@@ -8,6 +8,10 @@ across the ZHAC platform.
 
 ## [Unreleased]
 
+### Added
+
+- **Hub GPIO control** (needs a firmware with `/api/io`): Settings › **I/O** edits the hub's pin table (`GET`/`PUT /api/io`: GPIO from the allowed list, mode out/pwm/in/adc/strip, name, invert, pull, boot, frequency, ADC interval/delta, LED count) and shows each pin's value and error; the firmware's refusal text is shown as is. The section is hidden when the hub answers 404. Devices with `local: true` (the Hub I/O device) lose the Zigbee-only controls: Re-interview, Configure, Remove, the Bind and Groups tabs, and the remove button in the list (`isLocal` in `utils.js`). Rule help lists `gpio.set`, `gpio.toggle` and `pwm.set` with a rule template; script help lists the six `zhac.gpio_*`/`pwm_write`/`adc_read`/`ws_write` functions, and the editor completes them.
+
 ### Fixed
 
 - **The Storage error card says to restart first** (`pages/Settings.jsx`, review 2026-10-29, fix re-review N2). A wired hub whose device store stays shut for one boot (its move to `zhac_data` not yet final, and `nvs` not read back whole) shows this card, whose only button erased all storage, the copy it protects included. The card now has Restart hub beside the erase and says to erase only if it comes back after a restart. It says sign-in needs the serial token only when sign-in storage failed too (`auth_storage_error`).

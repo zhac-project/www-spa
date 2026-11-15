@@ -42,6 +42,15 @@ zhac.telegram_settoken(token)           -- persist bot token on S3.
 zhac.telegram_setchat(chat_id_str)     -- persist default chat id (string).
 zhac.telegram_send(text [, chat [, parse_mode]]) -- async send; returns bool.`}</pre>
 
+            <h4>GPIO (<code>zhac.*</code>, pins set up in Settings › I/O)</h4>
+            <pre class="dsl-snippet">{`zhac.gpio_write(pin, v)         → true | nil, err   -- out pin; v 0|1|true|false
+zhac.gpio_toggle(pin)           → level | nil, err   -- out pin; returns new 0|1
+zhac.gpio_read(pin)             → 0|1 | nil, err     -- out or in pin
+zhac.pwm_write(pin, duty)       → true | nil, err    -- pwm pin; duty 0-100
+zhac.adc_read(pin)              → value, raw | nil, err -- adc pin; mV or raw
+zhac.ws_write(pin, colors)      → true | nil, err    -- strip pin; {0xRRGGBB, ...}`}</pre>
+            <p class="field-hint"><code>pin</code> is the configured name or GPIO number.</p>
+
             <h4>Examples</h4>
             <p><b>Toggle a light from a button rule</b></p>
             <pre class="dsl-snippet">{`-- scripts/toggle_kitchen_light.lua

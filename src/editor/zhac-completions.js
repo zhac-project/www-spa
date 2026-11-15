@@ -5,6 +5,11 @@
 
 export const ZHAC_API = [
     {
+        "label": "zhac.adc_read",
+        "detail": "(pin) → value, raw | nil, err",
+        "info": "Read an adc pin now. value is millivolts where the target is calibrated (P4), otherwise the raw reading."
+    },
+    {
         "label": "zhac.event",
         "detail": "(name)",
         "info": "Publish a RULE_EVENT on the P4 internal EventBus. This fires every simple rule with an ON Event#<name> trigger and every Lua handler registered via zhac.on_cron (cron triggers use "
@@ -13,6 +18,21 @@ export const ZHAC_API = [
         "label": "zhac.get_attr",
         "detail": "(ieee_hex, key) → int | string | bool | nil",
         "info": "Read the last-known attribute value from the device shadow. Does not issue a ZCL read — the shadow is populated by the incoming report stream."
+    },
+    {
+        "label": "zhac.gpio_read",
+        "detail": "(pin) → level | nil, err",
+        "info": "Read an out or in pin as 0 or 1 (logical; invert applies)."
+    },
+    {
+        "label": "zhac.gpio_toggle",
+        "detail": "(pin) → level | nil, err",
+        "info": "Flip an out pin; returns the new level (0 or 1)."
+    },
+    {
+        "label": "zhac.gpio_write",
+        "detail": "(pin, v) → true | nil, err",
+        "info": "Set an out pin. v is 0, 1, true or false (logical; the pin's invert applies). pin is the configured name or GPIO number. Only pins configured in Settings › I/O, in their configured"
     },
     {
         "label": "zhac.log",
@@ -55,6 +75,11 @@ export const ZHAC_API = [
         "info": "Publish to the MQTT broker via mqtt_gw_publish. No-op if the gateway isn't connected (no return value surfaces that state — use GET /api/status with the API token, or the WebUI, to"
     },
     {
+        "label": "zhac.pwm_write",
+        "detail": "(pin, duty) → true | nil, err",
+        "info": "Set a pwm pin's duty, 0-100 percent (decimals allowed)."
+    },
+    {
         "label": "zhac.set_attr",
         "detail": "(ieee_hex, key, value) → bool",
         "info": "Write a Zigbee attribute on a paired device. The value type drives the underlying wire encoding:"
@@ -78,5 +103,10 @@ export const ZHAC_API = [
         "label": "zhac.telegram_settoken",
         "detail": "(token) → bool",
         "info": "Persist the Telegram bot token on S3. Required before telegram_send works. Token comes from BotFather (/newbot). Stored in S3 NVS at zhac/tg_token, masked in all logs. Returns true"
+    },
+    {
+        "label": "zhac.ws_write",
+        "detail": "(pin, colors) → true | nil, err",
+        "info": "Write a WS2812 strip (GRB order) on a strip pin. colors is a table of 0xRRGGBB numbers; entries past the configured leds count are ignored."
     }
 ];

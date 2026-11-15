@@ -19,6 +19,8 @@ import { SCHEDULE_DAYS, WEEKDAYS, TEMP_MIN, TEMP_MAX, TEMP_STEP,
          parseDay, formatDay, validateDay } from "../schedule.js";
 import { lightChannels, cardKeys } from "../light.js";
 
+import { isLocal } from "../utils.js";
+
 const TABS = [
     { id: "info",     label: "Info"     },
     { id: "states",   label: "States"   },
@@ -138,11 +140,14 @@ export function DeviceDetailPage() {
     );
     if (!d) return <div class="page"><Spinner /></div>;
 
+    const local = isLocal(d);
+    const tabs = local ? TABS.filter(t => t.id !== "bind" && t.id !== "groups") : TABS;
+
     return (
         <div class="page">
             <div class="dev-wrapper">
                 <div class="dev-tabs" role="tablist">
-                    {TABS.map(t => (
+                    {tabs.map(t => (
                         <a key={t.id}
                            href="javascript:void(0)"
                            role="tab"
@@ -157,27 +162,27 @@ export function DeviceDetailPage() {
                     {tab === "info"     && <InfoTab     d={d} renameVal={renameVal} setRenameVal={setRenameVal} doRename={doRename} />}
                     {tab === "states"   && <StatesTab   d={d} ieee={ieee} />}
                     {tab === "commands" && <CommandsTab d={d} ieee={ieee} />}
-                    {tab === "bind"     && <BindTab     d={d} ieee={ieee} />}
-                    {tab === "groups"   && <GroupsTab   d={d} ieee={ieee} />}
+                    {tab === "bind"     && !local && <BindTab     d={d} ieee={ieee} />}
+                    {tab === "groups"   && !local && <GroupsTab   d={d} ieee={ieee} />}
                     {tab === "options"  && <OptionsTab  d={d} ieee={ieee} />}
 
                     <div class="dev-bottom-bar">
                         <div class="btn-strip">
                             <button onClick={() => navigate("devices")}>← Back</button>
-                            <button onClick={doReinterview} disabled={busy}>Re-interview</button>
-                            <button onClick={doConfigure}
+                            {!local && <button onClick={doReinterview} disabled={busy}>Re-interview</button>}
+                            {!local && <button onClick={doConfigure}
                                     disabled={busy}
                                     title="Re-run only bindings + reports + config_steps (skip interview). Use after a firmware update adds new wiring to a paired device.">
                                 Configure
-                            </button>
-                            <label class="hard-toggle"
+                            </button>}
+                            {!local && <label class="hard-toggle"
                                    title="Hard remove — also wipe NVS, shadow, and adapter caches so rejoin runs a full interview">
                                 <input type="checkbox"
                                        checked={hardRemove}
                                        onChange={(e) => setHardRemove(e.currentTarget.checked)} />
                                 <span>hard</span>
-                            </label>
-                            <button class="danger small" onClick={doRemove} disabled={busy}>Remove</button>
+                            </label>}
+                            {!local && <button class="danger small" onClick={doRemove} disabled={busy}>Remove</button>}
                         </div>
                     </div>
                 </div>

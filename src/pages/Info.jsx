@@ -37,6 +37,30 @@ function cloudRow(d) {
     return ["Cloud", entry.kind ? <Badge kind={entry.kind}>{entry.label}</Badge> : entry.label];
 }
 
+// reset_reason names from the hub (logcloud::reset_name in zhac-wired-core) -- labels only.
+const RESET_LABEL = {
+    power_on: "Power on",
+    sw:       "Restart",
+    panic:    "Crash",
+    int_wdt:  "Crash (interrupt watchdog)",
+    task_wdt: "Crash (task watchdog)",
+    wdt:      "Watchdog reset",
+    brownout: "Power dip (brownout)",
+    ext:      "Reset button",
+    other:    "Other",
+};
+
+// Why the hub last started and, right after a crash, where it crashed (/api/status reset_reason, last_crash).
+function startRows(d) {
+    if (!d.reset_reason) return [];
+    const label = RESET_LABEL[d.reset_reason] || d.reset_reason;
+    const c = d.last_crash;
+    return [
+        ["Started after", c ? <Badge kind="err">{label}</Badge> : label],
+        ...(c ? [["Crash", `${c.task || "?"}: ${c.cause || "?"} (pc ${c.pc || "?"})`]] : []),
+    ];
+}
+
 function KV({ rows }) {
     return (
         <table class="kv-table">
@@ -105,6 +129,7 @@ export function InfoPage() {
         ["Firmware",       d.fw_version || d.fw || "—"],
         ["Web UI",         __UI_VERSION__],
         ["Uptime",         d.uptime != null ? fmtUptime(d.uptime) : "—"],
+        ...startRows(d),
         netRow,
         ["IP Address",     d.ip  || "—"],
         ...(d.ip6 ? [["IPv6", d.ip6]] : []),

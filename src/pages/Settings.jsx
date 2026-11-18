@@ -152,15 +152,17 @@ export function SettingsPage() {
                         often clears at the next. Erase only if this card comes back.
                     </p>
                     <p class="muted">
-                        Erasing storage gives you a fresh hub: pair the devices again, then restore
-                        your last backup for names, rules and scripts. The Zigbee network keys are
-                        lost with the erase, so every device must pair again.
+                        Erasing clears the device list, rules, names, passwords and Wi-Fi settings.
+                        The Zigbee network is kept, so devices stay paired: after the restart turn on
+                        Permit join, and each device comes back the next time it sends something
+                        (press a button on battery devices). Then restore your last backup for
+                        names, rules and scripts.
                     </p>
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                         {d.restart && <RestartHubButton />}
                         <button class="danger small"
                                 onClick={async () => {
-                                    if (!confirm("Erase ALL storage on the hub and restart?\n\nDevices, rules, names, passwords and Wi-Fi settings are gone; nothing can be recovered afterwards.")) return;
+                                    if (!confirm("Erase the hub's storage and restart?\n\nThe device list, rules, names, passwords and Wi-Fi settings are erased and cannot be recovered. The Zigbee network is kept: turn on Permit join after the restart and the devices come back.")) return;
                                     try { await call("system.storage_reset"); showToast("Erasing — the hub restarts", "ok"); }
                                     catch (e) { showToast("Erase failed: " + e.message, "err"); }
                                 }}>

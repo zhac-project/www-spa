@@ -13,6 +13,10 @@ across the ZHAC platform.
 - **Info shows why the hub started and, after a crash, where it crashed** (`pages/Info.jsx`; needs zhac-wired-core with `reset_reason`/`last_crash` in status, research 2026-11-18 A2).
 - **Hub GPIO control** (needs a firmware with `/api/io`): Settings › **I/O** edits the hub's pin table (`GET`/`PUT /api/io`: GPIO from the allowed list, mode out/pwm/in/adc/strip, name, invert, pull, boot, frequency, ADC interval/delta, LED count) and shows each pin's value and error; the firmware's refusal text is shown as is. The section is hidden when the hub answers 404. Devices with `local: true` (the Hub I/O device) lose the Zigbee-only controls: Re-interview, Configure, Remove, the Bind and Groups tabs, and the remove button in the list (`isLocal` in `utils.js`). Rule help lists `gpio.set`, `gpio.toggle` and `pwm.set` with a rule template; script help lists the six `zhac.gpio_*`/`pwm_write`/`adc_read`/`ws_write` functions, and the editor completes them.
 
+### Changed
+
+- **Brand images 108 KB → 17 KB** (`src/assets/brand/`, research 2026-11-18 A14): 64 colours, no dithering, same look side by side. The wired firmware packs the SPA into its app image, so this is ~91 KB of the 6 MB slot.
+
 ### Fixed
 
 - **Settings › Erase storage says what it does** (`pages/Settings.jsx`, research 2026-11-18 A4). It said the network keys are lost and every device must pair again; the network is kept, and devices come back once Permit join is on and they send something.

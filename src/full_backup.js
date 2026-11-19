@@ -44,3 +44,34 @@ export function fullBackupName(disposition) {
     const m = /filename="([^"/\\]+)"/.exec(disposition || "");
     return m && !m[1].startsWith(".") ? m[1] : "zhac-full.zhacbak";
 }
+
+// POST /api/backup/restore with the upload's progress (0..1): the hub decrypts and writes the file as it arrives, so
+// that is the restore's progress (fetch() reports none for uploads).
+export function uploadRestore(body, headers, onProgress, Xhr = globalThis.XMLHttpRequest) {
+    return new Promise((resolve, reject) => {
+        const x = new Xhr();
+        x.open("POST", "/api/backup/restore");
+        for (const k in headers) x.setRequestHeader(k, headers[k]);
+        x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        x.onload = () => {
+            if (x.status >= 200 && x.status < 300) return resolve();
+            let j = null;
+            try { j = JSON.parse(x.responseText); } catch (_) {}
+            reject(new Error(fullBackupError(j, x.status)));
+        };
+        x.onerror = () => reject(new Error("The connection to the hub broke"));
+        x.send(body);
+    });
+}
+
+// After the hub accepted a restore: asks `probe` (the hub's uptime in seconds, null while it does not answer) every
+// `everyMs` until the hub has booted since (an uptime shorter than the wait so far). False after `timeoutMs`.
+export async function waitForRestart(probe, { sleep, now, everyMs = 2000, timeoutMs = 180000 }) {
+    const t0 = now();
+    for (;;) {
+        const up = await probe();
+        if (up != null && up * 1000 < now() - t0) return true;
+        if (now() - t0 >= timeoutMs) return false;
+        await sleep(everyMs);
+    }
+}

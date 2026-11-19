@@ -17,8 +17,10 @@ import { copyText } from "../utils/clipboard.js";
 import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
 import { cleartextCredentials, isTlsUrl, normalizePin, brokerPatch } from "../mqtt_url.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP,
-         downloadFullBackup, restoreFullBackup } from "../stores/backup.js";
-import { passwordBytes } from "../full_backup.js";
+         downloadFullBackup, restoreFullBackup, hubUptime } from "../stores/backup.js";
+import { passwordBytes, waitForRestart } from "../full_backup.js";
+import { Modal } from "../components/Modal.jsx";
+import { Spinner } from "../components/Spinner.jsx";
 
 export function SettingsPage() {
     const d = status.value || {};
@@ -499,7 +501,8 @@ function BackupCard({ status }) {
 function FullBackup() {
     const [pw, setPw]     = useState("");
     const [pw2, setPw2]   = useState("");
-    const [busy, setBusy] = useState("");   // "download" | "restore"
+    const [busy, setBusy] = useState("");   // "download"
+    const [run, setRun]   = useState(null); // the restore under way: {pct} | {restarting} | {late} | {err}
     const fileRef = useRef(null);
     const n = passwordBytes(pw);
     const pwOk = n >= 8 && n <= 63;
@@ -525,12 +528,19 @@ function FullBackup() {
                      "break it.\n\n" +
                      "The hub restarts to finish, in about a minute. Sign in with the backup's password if it " +
                      "differs.")) return;
-        setBusy("restore");
+        setRun({ pct: 0 });
+        const stay = (ev) => { ev.preventDefault(); ev.returnValue = ""; };   // leaving now cancels the restore
+        addEventListener("beforeunload", stay);
         try {
-            await restoreFullBackup(file, pw);
-            showToast("Restore accepted: the hub is restarting to put it in place", "ok");
-        } catch (err) { showToast("Restore failed: " + err.message, "err"); }
-        finally { setBusy(""); }
+            await restoreFullBackup(file, pw, (f) => setRun({ pct: Math.round(f * 100) }));
+        } catch (err) {
+            setRun({ err: err.message });
+            return;
+        } finally { removeEventListener("beforeunload", stay); }
+        setRun({ restarting: true });
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        if (await waitForRestart(hubUptime, { sleep, now: Date.now })) location.reload();
+        else setRun({ late: true });
     }
 
     return (
@@ -553,14 +563,43 @@ function FullBackup() {
                 </button>
                 <button class="small" disabled={!!busy || !pwOk}
                         onClick={() => fileRef.current && fileRef.current.click()}>
-                    {busy === "restore" ? "Restoring…" : "Restore full backup…"}
+                    Restore full backup…
                 </button>
                 <input ref={fileRef} type="file" accept=".zhacbak" hidden onChange={restore} />
             </div>
             <p class="field-hint" style="margin-top:6px">
                 To restore, type the backup's password, then pick the file. A lost password cannot be recovered.
-                The hub's page pauses for the seconds a download or restore takes.
+                The hub's page pauses for the seconds a download takes.
             </p>
+            {/* No way out while it runs: no Close, Escape and the backdrop do nothing. */}
+            <Modal open={!!run} title="Restoring the full backup"
+                   footer={run?.err ? <button onClick={() => setRun(null)}>Close</button>
+                         : run?.late ? <button onClick={() => location.reload()}>Reload</button> : false}>
+                <RestoreState run={run} />
+            </Modal>
+        </>
+    );
+}
+
+function RestoreState({ run }) {
+    if (!run) return null;
+    if (run.err) return <p>Restore failed: {run.err}</p>;
+    if (run.late) return <p>The hub has not come back in 3 minutes. Check its power and network, then reload this page.</p>;
+    if (run.restarting) return (
+        <>
+            <p>The backup is on the hub. It is restarting to put it in place; this page reloads by itself when the
+               hub is back, usually within a minute.</p>
+            <Spinner label="Waiting for the hub…" />
+        </>
+    );
+    return (
+        <>
+            <p>Sending the backup: the hub checks and writes it as it arrives. Keep this page open.</p>
+            <div class="ota-progress" role="progressbar" aria-label="Restore progress"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.pct}>
+                <div class="ota-progress-bar" style={{ width: run.pct + "%" }} />
+                <div class="ota-progress-label">{run.pct < 100 ? run.pct + " %" : "Checking the file…"}</div>
+            </div>
         </>
     );
 }

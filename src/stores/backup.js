@@ -8,7 +8,7 @@
 // credentials (MQTT broker URL, passwords).
 import { call } from "../ws/client.js";
 import { writeScript } from "./scripts.js";
-import { restoreBody, fullBackupError, fullBackupName } from "../full_backup.js";
+import { restoreBody, fullBackupError, fullBackupName, uploadRestore } from "../full_backup.js";
 import { renameDevice } from "./devices.js";
 export { describeBackup, NOT_IN_BACKUP } from "../backup_preview.js";
 
@@ -118,10 +118,14 @@ export async function restoreBackup(b) {
 // Full backup (wired hubs that report full_backup): the hub encrypts and
 // decrypts; the page carries the bytes. Helpers and error words: full_backup.js.
 // ---------------------------------------------------------------------------
-async function postHub(path, type, body) {
+function hubHeaders(type) {
     const headers = { "Content-Type": type, "Cache-Control": "no-store" };
     try { const t = localStorage.getItem("zhac_token"); if (t) headers["X-Api-Key"] = t; } catch (_) {}
-    const r = await fetch(path, { method: "POST", headers, body, cache: "no-store" });
+    return headers;
+}
+
+async function postHub(path, type, body) {
+    const r = await fetch(path, { method: "POST", headers: hubHeaders(type), body, cache: "no-store" });
     if (!r.ok) throw new Error(fullBackupError(await r.json().catch(() => null), r.status));
     return r;
 }
@@ -134,7 +138,15 @@ export async function downloadFullBackup(password) {
     return blob.size;
 }
 
-// The hub checks and stages the file, then restarts to put it in place.
-export async function restoreFullBackup(file, password) {
-    await postHub("/api/backup/restore", "application/octet-stream", restoreBody(password, file));
+// The hub checks and stages the file as it arrives (onProgress: 0..1), then restarts to put it in place.
+export function restoreFullBackup(file, password, onProgress) {
+    return uploadRestore(restoreBody(password, file), hubHeaders("application/octet-stream"), onProgress);
+}
+
+// The hub's uptime in seconds from the public /api/status; null while it does not answer.
+export async function hubUptime() {
+    try {
+        const r = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(3000) });
+        return (await r.json()).uptime_s ?? null;
+    } catch (_) { return null; }
 }

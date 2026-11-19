@@ -10,9 +10,9 @@ export const LINKS = {
     rules:         `${GH}/zhac-docs/blob/master/RULES_DSL.md`,
     lua:           `${GH}/zhac-docs/blob/master/LUA_API.md`,
     devices:       "https://zhac.org/devices/",
-    deviceRequest: `${GH}/zhac-platform/issues/new?template=device-request.yml`,
-    bug:           `${GH}/zhac-platform/issues/new?template=bug.yml`,
-    discussions:   `${GH}/zhac-platform/discussions`,
+    deviceRequest: `${GH}/zhac-docs/issues/new?template=device-request.yml`,
+    bug:           `${GH}/zhac-docs/issues/new?template=bug.yml`,
+    discussions:   `${GH}/zhac-docs/discussions`,
     flasher:       "https://zhac.org/flash/",
     radio:         `${GH}/zhac-wired-core#zigbee-radio-esp32-c6`,
     releases: {

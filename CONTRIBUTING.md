@@ -96,7 +96,7 @@ A `prebuild` hook also runs this before every `npm run build`.
 
 ## Reporting bugs
 
-Use the [bug report form](https://github.com/zhac-project/zhac-platform/issues/new?template=bug.yml).
+Use the [bug report form](https://github.com/zhac-project/zhac-docs/issues/new?template=bug.yml).
 Useful extras for UI bugs:
 - Browser + version
 - Firmware and web UI version (Info page)

@@ -18,6 +18,7 @@ across the ZHAC platform.
 
 ### Changed
 
+- **"Report a bug", "Request a device" and Discussions open zhac-docs** (`src/links.js`, CONTRIBUTING): zhac-platform is archived and takes no new issues. A test keeps every link that asks the user to act off the archived repos; the release links of the archived builds stay.
 - **Brand images 108 KB → 17 KB** (`src/assets/brand/`, research 2026-11-18 A14): 64 colours, no dithering, same look side by side. The wired firmware packs the SPA into its app image, so this is ~91 KB of the 6 MB slot.
 
 ### Fixed

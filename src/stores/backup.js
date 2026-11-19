@@ -8,6 +8,7 @@
 // credentials (MQTT broker URL, passwords).
 import { call } from "../ws/client.js";
 import { writeScript } from "./scripts.js";
+import { restoreBody, fullBackupError, fullBackupName } from "../full_backup.js";
 import { renameDevice } from "./devices.js";
 export { describeBackup, NOT_IN_BACKUP } from "../backup_preview.js";
 
@@ -41,7 +42,11 @@ export async function createBackup(status = {}) {
 }
 
 export function downloadJson(obj, filename) {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }));
+    saveBlob(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }), filename);
+}
+
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });
     document.body.appendChild(a);
     a.click();
@@ -107,4 +112,29 @@ export async function restoreBackup(b) {
         } catch (e) { out.skipped.push(`collection "${g.name}": ${e.message}`); }
     }
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// Full backup (wired hubs that report full_backup): the hub encrypts and
+// decrypts; the page carries the bytes. Helpers and error words: full_backup.js.
+// ---------------------------------------------------------------------------
+async function postHub(path, type, body) {
+    const headers = { "Content-Type": type, "Cache-Control": "no-store" };
+    try { const t = localStorage.getItem("zhac_token"); if (t) headers["X-Api-Key"] = t; } catch (_) {}
+    const r = await fetch(path, { method: "POST", headers, body, cache: "no-store" });
+    if (!r.ok) throw new Error(fullBackupError(await r.json().catch(() => null), r.status));
+    return r;
+}
+
+// Saves the file; resolves once all of it arrived (a cut-off download rejects).
+export async function downloadFullBackup(password) {
+    const r = await postHub("/api/backup/full", "application/json", JSON.stringify({ password }));
+    const blob = await r.blob();
+    saveBlob(blob, fullBackupName(r.headers.get("Content-Disposition")));
+    return blob.size;
+}
+
+// The hub checks and stages the file, then restarts to put it in place.
+export async function restoreFullBackup(file, password) {
+    await postHub("/api/backup/restore", "application/octet-stream", restoreBody(password, file));
 }

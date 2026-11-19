@@ -16,7 +16,9 @@ import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
 import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
 import { cleartextCredentials, isTlsUrl, normalizePin, brokerPatch } from "../mqtt_url.js";
-import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP } from "../stores/backup.js";
+import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP,
+         downloadFullBackup, restoreFullBackup } from "../stores/backup.js";
+import { passwordBytes } from "../full_backup.js";
 
 export function SettingsPage() {
     const d = status.value || {};
@@ -426,7 +428,8 @@ export function SettingsPage() {
 
 // ---------------------------------------------------------------------------
 // Backup card — device names, rules, Lua scripts and collections to one JSON
-// file, and back. Logic in stores/backup.js.
+// file, and back; on hubs that report full_backup, also the whole hub as one
+// encrypted file. Logic in stores/backup.js and full_backup.js.
 // ---------------------------------------------------------------------------
 function BackupCard({ status }) {
     const [busy, setBusy] = useState(false);
@@ -486,7 +489,79 @@ function BackupCard({ status }) {
                     {result.skipped.length > 0 && <> Skipped: {result.skipped.join("; ")}.</>}
                 </p>
             )}
+            {status.full_backup && <FullBackup />}
         </Card>
+    );
+}
+
+// The whole hub in one file the hub encrypts with this password: the Zigbee
+// network with its keys, devices, rules, scripts, settings and sign-in.
+function FullBackup() {
+    const [pw, setPw]     = useState("");
+    const [pw2, setPw2]   = useState("");
+    const [busy, setBusy] = useState("");   // "download" | "restore"
+    const fileRef = useRef(null);
+    const n = passwordBytes(pw);
+    const pwOk = n >= 8 && n <= 63;
+
+    async function download() {
+        if (pw !== pw2) { showToast("The passwords don't match", "err"); return; }
+        setBusy("download");
+        try {
+            const size = await downloadFullBackup(pw);
+            showToast(`Full backup saved (${Math.round(size / 1024)} KB). It holds the network keys: keep it safe`, "ok");
+        } catch (e) { showToast("Full backup failed: " + e.message, "err"); }
+        finally { setBusy(""); }
+    }
+
+    async function restore(e) {
+        const file = e.currentTarget.files && e.currentTarget.files[0];
+        e.currentTarget.value = "";
+        if (!file) return;
+        if (!confirm(`Replace everything on this hub with "${file.name}"?\n\n` +
+                     "The Zigbee network, devices, rules, scripts, settings and sign-in all come from the " +
+                     "backup; what this hub holds now is lost.\n\n" +
+                     "Keep the hub the backup came from switched off for good: two hubs running one network " +
+                     "break it.\n\n" +
+                     "The hub restarts to finish, in about a minute. Sign in with the backup's password if it " +
+                     "differs.")) return;
+        setBusy("restore");
+        try {
+            await restoreFullBackup(file, pw);
+            showToast("Restore accepted: the hub is restarting to put it in place", "ok");
+        } catch (err) { showToast("Restore failed: " + err.message, "err"); }
+        finally { setBusy(""); }
+    }
+
+    return (
+        <>
+            <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+            <p class="muted" style="margin-bottom:8px;font-size:var(--text-sm)">
+                <b>Full backup:</b> the whole hub (the Zigbee network with its keys, devices, rules, scripts,
+                settings and sign-in) as one file, encrypted with the password below. Restored on this hub or a
+                new one, the devices keep working without pairing again.
+            </p>
+            <label class="login-field"><span>Backup password</span>
+                <input type="password" value={pw} autocomplete="new-password" placeholder="8-63 characters"
+                       onInput={(e) => setPw(e.currentTarget.value)} /></label>
+            <label class="login-field"><span>Repeat password</span>
+                <input type="password" value={pw2} autocomplete="new-password"
+                       onInput={(e) => setPw2(e.currentTarget.value)} /></label>
+            <div class="btn-strip">
+                <button class="primary small" disabled={!!busy || !pwOk || !pw2} onClick={download}>
+                    {busy === "download" ? "Preparing…" : "Download full backup"}
+                </button>
+                <button class="small" disabled={!!busy || !pwOk}
+                        onClick={() => fileRef.current && fileRef.current.click()}>
+                    {busy === "restore" ? "Restoring…" : "Restore full backup…"}
+                </button>
+                <input ref={fileRef} type="file" accept=".zhacbak" hidden onChange={restore} />
+            </div>
+            <p class="field-hint" style="margin-top:6px">
+                To restore, type the backup's password, then pick the file. A lost password cannot be recovered.
+                The hub's page pauses for the seconds a download or restore takes.
+            </p>
+        </>
     );
 }
 

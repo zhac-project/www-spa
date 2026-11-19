@@ -29,12 +29,13 @@ ON door sensor#contact DO event motion ENDON`}</pre>
             <p><b>Wildcard</b> — match every attribute on a device (route to a Lua script):</p>
             <pre class="dsl-snippet">{`ON kitchen_motion DO script.run "kitchen_motion" ENDON`}</pre>
 
-            <p><b>System / Time / Event / Timer / MQTT:</b></p>
+            <p><b>System / Time / Event / Timer / MQTT / Offline:</b></p>
             <pre class="dsl-snippet">{`ON System#Boot           DO ... ENDON
 ON Time#Cron=0 0 22 * * *  DO ... ENDON     // sec min hour mday mon wday
 ON Event#motion_detected DO ... ENDON
 ON Rules#Timer=1         DO ... ENDON     // index 1–8
-ON Mqtt#home/alarm       DO ... ENDON`}</pre>
+ON Mqtt#home/alarm       DO ... ENDON
+ON Offline#kitchen_plug  DO ... ENDON     // a mains device stopped answering its ping`}</pre>
 
             <h4>Actions</h4>
             <pre class="dsl-snippet">{`zigbee.set <device> <key> <value>      // set attribute by name

@@ -347,7 +347,7 @@ export function DevicesPage() {
                                 <td class="col-manuf">{d.vendor || "—"}</td>
                                 <td class="col-model">{d.model || "—"}</td>
                                 <td class="col-lqi">{d.lqi != null ? d.lqi : "—"}</td>
-                                <td class="col-seen">{fmtSince(d.last_seen)}</td>
+                                <td class="col-seen">{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Did not answer its availability ping">Offline</span></>}</td>
                                 <td class="col-act">
                                     <div class="act-group">
                                         <button class="act-btn edit" title="Details" aria-label={`Details of ${d.name || d.ieee}`}

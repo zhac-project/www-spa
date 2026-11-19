@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { signal } from "@preact/signals";
 import { call, on } from "../ws/client.js";
+import { mergeAttrBulk } from "../utils/deviceMerge.js";
 
 // Device shape (loose): { ieee, name, nwk, vendor, model, eps, clusters,
 //   exposes, attrs, lqi, last_seen, proto, power_source, ... }
@@ -165,38 +166,9 @@ on("attr.changed", (a) => {
     });
 });
 
-// attr.bulk now carries an ARRAY of per-attr device_update entries,
-// emitted by S3's coalescer every ~100 ms. Each entry is shaped
-// `{type,ieee,lqi,last_seen,attrs}`. Multiple entries for the same
-// IEEE may appear in one batch; we merge their attrs in order, then
-// walk devices once.
+// attr.bulk carries an ARRAY of per-device entries, emitted by the hub's
+// coalescer every ~100 ms; utils/deviceMerge.js folds them in.
 on("attr.bulk", (entries) => {
-    if (!Array.isArray(entries) || entries.length === 0) return;
-
-    // First pass: build a lookup keyed by lowercased IEEE so multiple
-    // updates to the same device collapse into one merged delta.
-    const updates = new Map();
-    for (const a of entries) {
-        if (!a || !a.ieee || !a.attrs) continue;
-        const key = String(a.ieee).toLowerCase();
-        const prev = updates.get(key);
-        updates.set(key, {
-            attrs:     { ...(prev?.attrs || {}), ...a.attrs },
-            lqi:       a.lqi       != null ? a.lqi       : prev?.lqi,
-            last_seen: a.last_seen != null ? a.last_seen : prev?.last_seen,
-        });
-    }
-    if (updates.size === 0) return;
-
-    // Second pass: apply each merged delta to the matching row.
-    devices.value = devices.value.map(x => {
-        const u = updates.get(String(x.ieee).toLowerCase());
-        if (!u) return x;
-        return {
-            ...x,
-            attrs:     { ...(x.attrs || {}), ...u.attrs },
-            lqi:       u.lqi       != null ? u.lqi       : x.lqi,
-            last_seen: u.last_seen != null ? u.last_seen : x.last_seen,
-        };
-    });
+    const next = mergeAttrBulk(devices.value, entries);
+    if (next !== devices.value) devices.value = next;
 });

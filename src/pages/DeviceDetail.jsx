@@ -31,7 +31,7 @@ const TABS = [
 ];
 
 // Overlay `live` (from the devices-store row for this IEEE) onto the
-// detail snapshot: spread its attrs in, prefer its fresher last_seen/lqi.
+// detail snapshot: spread its attrs in, prefer its fresher last_seen/lqi/offline.
 // Returns `detail` unchanged when no live row exists.
 function mergeLiveAttrs(detail, live) {
     if (!live) return detail;
@@ -40,6 +40,7 @@ function mergeLiveAttrs(detail, live) {
         attrs:     { ...(detail.attrs || {}), ...(live.attrs || {}) },
         last_seen: live.last_seen ?? detail.last_seen,
         lqi:       live.lqi       ?? detail.lqi,
+        offline:   live.offline   ?? detail.offline,
     };
 }
 
@@ -210,7 +211,7 @@ function InfoTab({ d, renameVal, setRenameVal, doRename }) {
                     <tr><th>Model</th><td>{d.model || "—"}</td></tr>
                     <tr><th>Power Source</th><td>{d.power_source || "—"}</td></tr>
                     <tr><th>LQI</th><td>{d.lqi != null ? d.lqi : "—"}</td></tr>
-                    <tr><th>Last seen</th><td>{fmtSince(d.last_seen)}</td></tr>
+                    <tr><th>Last seen</th><td>{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Did not answer its availability ping">Offline</span></>}</td></tr>
                     <tr><th>Converter</th><td>{d.vendor && d.model ? `${d.vendor}/${d.model}` : "none"}</td></tr>
                     {eps.map((epId, i) => (
                         <tr key={epId}>

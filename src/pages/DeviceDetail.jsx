@@ -4,7 +4,7 @@
 // TODO: Bind tab currently lists bindings from d.bindings and wires to
 // `device.bind` + `device.bind (unbind:true)`. Options tab is a
 // placeholder for device-specific UI driven by `exposes`.
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { ui, navigate, showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { getDevice, renameDevice, reinterviewDevice, configureDevice,
          deleteDevice, setDeviceAttr, bindDevice,
@@ -18,6 +18,9 @@ import { call } from "../ws/client.js";
 import { SCHEDULE_DAYS, WEEKDAYS, TEMP_MIN, TEMP_MAX, TEMP_STEP,
          parseDay, formatDay, validateDay } from "../schedule.js";
 import { lightChannels, cardKeys } from "../light.js";
+import { status } from "../stores/status.js";
+import { otaState, otaUpload, otaCancel } from "../stores/deviceOta.js";
+import { otaStateText, otaPct } from "../device_ota.js";
 
 import { isLocal } from "../utils.js";
 
@@ -221,6 +224,78 @@ function InfoTab({ d, renameVal, setRenameVal, doRename }) {
                     ))}
                 </tbody>
             </table>
+            {status.value.device_ota && <FirmwareCard ieee={d.ieee} />}
+        </div>
+    );
+}
+
+// Zigbee device firmware update, on hubs that report device_ota (research 2026-11-18 C2). The hub runs one update
+// at a time and decides everything; words for its state: device_ota.js.
+function FirmwareCard({ ieee }) {
+    const [s, setS] = useState(null);   // GET /api/device/ota
+    const [busy, setBusy] = useState(false);
+    const fileRef = useRef(null);
+    const refresh = () => otaState().then(setS, () => {});
+    const running = !!s && (s.state === "waiting" || s.state === "sending");
+    const mine = !!s && s.state !== "idle" && normIeee(s.ieee) === normIeee(ieee);
+    const other = running && !mine;
+    useEffect(() => { refresh(); }, [ieee]);
+    useEffect(() => {
+        if (!running) return undefined;
+        const t = setInterval(refresh, 2000);
+        return () => clearInterval(t);
+    }, [running]);
+
+    async function pick(e) {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!file || !confirm(`Update this device with ${file.name}?\n\nIt takes 10 to 60 minutes. Keep the device ` +
+                              "powered and near the hub until it ends. A device that sleeps starts when it next wakes.")) return;
+        setBusy(true);
+        try { await otaUpload(ieee, file); }
+        catch (err) { showToast("Firmware update: " + err.message, "err"); }
+        finally { setBusy(false); refresh(); }
+    }
+
+    async function cancel() {
+        if (!confirm("Stop the update? The device keeps its firmware.")) return;
+        setBusy(true);
+        try { setS(await otaCancel()); }
+        catch (err) { showToast("Cancel failed: " + err.message, "err"); }
+        finally { setBusy(false); }
+    }
+
+    const minutes = running && s.elapsed_s >= 60 ? ` (${Math.floor(s.elapsed_s / 60)} min)` : "";
+    return (
+        <div style="margin-top:18px">
+            <h4 style="margin:0 0 4px">Firmware update</h4>
+            {mine && <p class="tab-hint">{otaStateText(s)}{minutes}</p>}
+            {mine && s.state === "sending" && (
+                <div class="ota-progress" role="progressbar" aria-label="Firmware update progress"
+                     aria-valuemin="0" aria-valuemax="100" aria-valuenow={otaPct(s)}>
+                    <div class="ota-progress-bar" style={{ width: otaPct(s) + "%" }} />
+                    <div class="ota-progress-label">{otaPct(s)} %</div>
+                </div>
+            )}
+            {other && (
+                <p class="tab-hint">
+                    Another device is updating (<a href="#" onClick={(e) => { e.preventDefault(); navigate("device", { ieee: s.ieee }); }}>
+                    {s.ieee}</a>). The hub runs one update at a time.
+                </p>
+            )}
+            {!mine && !other && (
+                <p class="tab-hint">
+                    Pick this device's Zigbee OTA file from its maker. The hub checks it and sends it to this device only.
+                </p>
+            )}
+            <div class="btn-strip" style="margin-top:8px">
+                {mine && running
+                    ? <button class="small" disabled={busy} onClick={cancel}>Cancel update</button>
+                    : <button class="small" disabled={busy || other} onClick={() => fileRef.current && fileRef.current.click()}>
+                          {busy ? "Sending the file…" : "Update firmware…"}
+                      </button>}
+                <input ref={fileRef} type="file" hidden onChange={pick} />
+            </div>
         </div>
     );
 }

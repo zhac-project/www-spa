@@ -56,6 +56,14 @@ test("failed: the reason in words", () => {
     assert.match(otaStateText({ ...base, state: "failed", reason: "odd" }), /odd/);
 });
 
+test("failed: the device runs a newer version; the download stopped", () => {
+    const t = otaStateText({ ...base, state: "failed", reason: "device_newer", device_version: 0x23090000 });
+    assert.match(t, /0x23090000/);
+    assert.match(t, /0x23086631/);
+    assert.match(t, /newer/);
+    assert.match(otaStateText({ ...base, state: "failed", reason: "device_silent" }), /stopped asking/);
+});
+
 test("cancelled, idle", () => {
     assert.match(otaStateText({ ...base, state: "cancelled" }), /keeps its firmware/);
     assert.equal(otaStateText({ state: "idle" }), "");

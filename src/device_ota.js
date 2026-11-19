@@ -37,6 +37,7 @@ const DEVICE_STATUS = {
 const FAILED = {
     device_left: "The device left the hub. It keeps its firmware.",
     device_aborted: "The download stopped before the end. The device keeps its firmware; try again.",
+    device_silent: "The device stopped asking for the image for 10 minutes. It keeps its firmware; try again.",
 };
 
 // One line for the hub's update state (GET /api/device/ota).
@@ -61,6 +62,10 @@ export function otaStateText(s) {
         if (s.reason === "device_status") {
             return "The device refused the image: " +
                    (DEVICE_STATUS[s.device_status] || `status ${hex(s.device_status, 2)}`) + ". It keeps its firmware.";
+        }
+        if (s.reason === "device_newer") {
+            return `The device runs ${hex(s.device_version, 8)}, newer than this file (${hex(s.file_version, 8)}). ` +
+                   "It keeps its firmware: the hub does not install older versions.";
         }
         return FAILED[s.reason] || `The update failed (${s.reason || "no reason given"}).`;
     case "cancelled":

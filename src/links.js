@@ -15,9 +15,5 @@ export const LINKS = {
     discussions:   `${GH}/zhac-docs/discussions`,
     flasher:       "https://zhac.org/flash/",
     radio:         `${GH}/zhac-wired-core#zigbee-radio-esp32-c6`,
-    releases: {
-        dual:   `${GH}/zhac-platform/releases/latest`,
-        wired:  `${GH}/zhac-wired-core/releases/latest`,
-        single: `${GH}/zhac-mono-core/releases`,
-    },
+    releases:      `${GH}/zhac-wired-core/releases/latest`,
 };

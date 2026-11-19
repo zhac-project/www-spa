@@ -39,10 +39,10 @@ test("checkScript: a source too long for one frame is checked over REST, not sen
     assert.equal(posts[0].init.body, longSrc);
 });
 
-test("checkScript: the dual-chip hub has no REST check (it would save a script named check)", async () => {
-    status.value = { uptime: 1, p4: true };
+test("checkScript: a long source goes over REST before the first status lands, too", async () => {
+    status.value = null;
     posts.length = 0;
-    await assert.rejects(checkScript(longSrc), /too_large/);
-    assert.equal(posts.length, 0);
+    assert.deepEqual(await checkScript(longSrc), { ok: false, err: "'end' expected", line: 3 });
+    assert.equal(posts.length, 1);
     assert.equal(sent.length, 0);
 });

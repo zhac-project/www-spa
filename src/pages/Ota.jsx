@@ -7,21 +7,15 @@
 //
 // The browser reads GitHub Releases (releases.js) and hands the hub ONE
 // download URL, exactly as the URL form does; the hub itself never talks to
-// GitHub's API. Devices and the radio network are preserved structurally:
-//   • CC2652 NV (PAN ID, NWK key, child table) is on the radio module,
-//     never touched by either OTA path.
-//   • ESP32 NVS partition (zap_store device snapshots, friendly names,
-//     wifi creds) is separate from the OTA app slots — `esp_ota_write`
-//     only touches the inactive `ota_X` partition.
-//   • SPIFFS (SPA + Lua scripts) is its own partition too.
+// GitHub's API. The hub writes only its inactive firmware slot: the Zigbee
+// network, devices, rules and scripts live in partitions of their own.
 //
-// Trigger flow is fire-and-forget at the SPA layer; the backend
-// acknowledges with 202 Accepted and reboots into the new slot when
-// the flash completes (~30-90 s later). The WS reconnects automatically
-// after the chip comes back up.
+// `ota.update` answers at once; the hub downloads the image and restarts into
+// it. Its ota.* push events (target "self") drive the progress bar, and the
+// WebSocket reconnects once the hub is back.
 
 import { useEffect, useState } from "preact/hooks";
-import { triggerOtaS3, triggerOtaP4, triggerOtaSelf, otaProgress } from "../stores/ota.js";
+import { triggerOtaSelf, otaProgress } from "../stores/ota.js";
 import { status, hubKind, chipName } from "../stores/status.js";
 import { showToast, withToast } from "../stores/ui.js";
 import { Card } from "../components/Card.jsx";
@@ -72,16 +66,16 @@ const OLDER_URL_TEXT = `\n\nIf this is an older release than the one installed, 
 
 // Published versions that fit one chip, with an Install button each.
 // `hub` = { chip, revision }; `installed` = the version the chip reports.
-function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall, busy, setBusy, target }) {
+function ReleasesCard({ hub, installed, chipLabel, confirmText, onInstall, busy, setBusy, target }) {
     const [st, setSt] = useState({ loading: true, rels: [], err: "" });
     useEffect(() => {
         let alive = true;
         setSt({ loading: true, rels: [], err: "" });
-        fetchReleases(kind, hub)
+        fetchReleases(hub)
             .then(rels => alive && setSt({ loading: false, rels, err: "" }))
             .catch(e => alive && setSt({ loading: false, rels: [], err: e.message || "failed" }));
         return () => { alive = false; };
-    }, [kind, hub.chip, hub.revision]);
+    }, [hub.chip, hub.revision]);
 
     async function install(rel, asset, older) {
         if (!confirm(`Install ${rel.tag} on the ${chipLabel}?\n\n${confirmText}${older ? OLDER_TEXT : ""}`)) return;
@@ -102,7 +96,7 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
                 <p class="muted">
                     Could not reach GitHub from this browser ({st.err}). The hub's network may have
                     no internet access. Open the{" "}
-                    <a href={RELEASES[kind] || RELEASES.wired} target="_blank" rel="noopener">releases page</a>{" "}
+                    <a href={RELEASES} target="_blank" rel="noopener">releases page</a>{" "}
                     from another device, or use the URL form under <em>Advanced</em> below.
                 </p>
             )}
@@ -147,8 +141,8 @@ function ReleasesCard({ kind, hub, installed, chipLabel, confirmText, onInstall,
     );
 }
 
-// `olderOption`: offer "Allow an older version" (wired hubs check the version).
-function UrlForm({ label, placeholder, busy, onFlash, olderOption }) {
+// The hub refuses an older version unless "Allow an older version" is ticked.
+function UrlForm({ label, placeholder, busy, onFlash }) {
     const [url, setUrl] = useState("");
     const [older, setOlder] = useState(false);
     return (
@@ -158,12 +152,10 @@ function UrlForm({ label, placeholder, busy, onFlash, olderOption }) {
                 <input type="url" placeholder={placeholder} value={url}
                        onInput={e => setUrl(e.currentTarget.value)} disabled={busy} />
             </label>
-            {olderOption && (
-                <label class="field">
-                    <span><input type="checkbox" checked={older} disabled={busy}
-                                 onChange={e => setOlder(e.currentTarget.checked)} /> Allow an older version</span>
-                </label>
-            )}
+            <label class="field">
+                <span><input type="checkbox" checked={older} disabled={busy}
+                             onChange={e => setOlder(e.currentTarget.checked)} /> Allow an older version</span>
+            </label>
             <div class="btn-strip">
                 <button onClick={() => onFlash(url.trim(), older)} disabled={busy || !url.trim()}>Install from URL</button>
             </div>
@@ -172,13 +164,11 @@ function UrlForm({ label, placeholder, busy, onFlash, olderOption }) {
 }
 
 export function OtaPage() {
-    const kind = hubKind(status.value);
-    if (kind === "dual") return <DualChipOta />;
-    if (!kind) return <div class="page" />;
-    return <SingleChipOta kind={kind} />;
+    if (!hubKind(status.value)) return <div class="page" />;   // until the first status lands
+    return <HubOta />;
 }
 
-function SingleChipOta({ kind }) {
+function HubOta() {
     const d = status.value || {};
     const [busy, setBusy] = useState(false);
     const chip = chipName(d);
@@ -232,7 +222,7 @@ function SingleChipOta({ kind }) {
                     it comes back here, report it with the reason above.</p>
                 </div>
             )}
-            <ReleasesCard kind={kind} hub={{ chip: chipToken(d.target), revision: d.revision }}
+            <ReleasesCard hub={{ chip: chipToken(d.target), revision: d.revision }}
                           installed={d.fw || d.fw_version} chipLabel={chip} confirmText={confirmText}
                           onInstall={triggerOtaSelf} busy={busy} setBusy={setBusy} target="self" />
             <details class="card">
@@ -242,7 +232,7 @@ function SingleChipOta({ kind }) {
                     (not the full-flash image); the hub downloads it itself, so the URL must be
                     reachable from its network.
                 </p>
-                <UrlForm label="Firmware URL" busy={busy} onFlash={doFlash} olderOption={kind === "wired"}
+                <UrlForm label="Firmware URL" busy={busy} onFlash={doFlash}
                          placeholder="https://…/zhac-wired-p4-rev1x-v2026….-ota.bin" />
             </details>
             <Card title="What survives an update">
@@ -251,82 +241,6 @@ function SingleChipOta({ kind }) {
                         their own flash partitions, which an update does not touch.</li>
                     <li><strong>Rules, scripts, names and settings</strong> — kept.</li>
                     <li><strong>The web UI</strong> — replaced together with the firmware.</li>
-                </ul>
-            </Card>
-        </div>
-    );
-}
-
-function DualChipOta() {
-    const d = status.value || {};
-    const [busy, setBusy] = useState(false);
-    const s3Text = "The chip will reboot ~60 s after the download completes. " +
-                   "WiFi + WebSocket drop briefly, then the SPA reconnects to " +
-                   "the new build. Devices remain paired.";
-    const p4Text = "S3 will pull the binary then stream it to P4 over the SPI/HAP " +
-                   "link as ~256-byte OTA_CHUNK frames. Total transfer ~60-120 s " +
-                   "for a 3 MB image. P4 reboots when done. Zigbee traffic pauses " +
-                   "during the transfer; devices stay paired because the CC2652 " +
-                   "radio module isn't touched.";
-
-    async function doS3(url) {
-        if (!looksLikeBinUrl(url)) { showToast("S3 URL must be http(s) and end in .bin", "err"); return; }
-        if (!confirm(`Flash S3 (net-core) firmware from this URL?\n\n${s3Text}`)) return;
-        setBusy(true);
-        await withToast(() => triggerOtaS3(url), "S3 OTA started — watch the system reboot in 30-90 s", "S3 OTA failed");
-        setBusy(false);
-    }
-
-    async function doP4(url) {
-        if (!looksLikeBinUrl(url)) { showToast("P4 URL must be http(s) and end in .bin", "err"); return; }
-        if (!confirm(`Flash P4 (main-core) firmware from this URL?\n\n${p4Text}`)) return;
-        setBusy(true);
-        await withToast(() => triggerOtaP4(url), "P4 OTA started — chunks streaming over HAP", "P4 OTA failed");
-        setBusy(false);
-    }
-
-    return (
-        <div class="page">
-            <h2>Firmware update (OTA)</h2>
-            <p class="muted">
-                Both chips can be updated independently. Devices are preserved
-                across OTA — the radio module keeps the network, and the ESP32
-                pool reloads from NVS after reboot. Update the S3 first, then the P4,
-                from the same release.
-            </p>
-
-            <ReleasesCard kind="dual" hub={{ chip: "s3" }} installed={d.fw_version}
-                          chipLabel="S3 (net-core)" confirmText={s3Text}
-                          onInstall={triggerOtaS3} busy={busy} setBusy={setBusy} target="s3" />
-            <ReleasesCard kind="dual" hub={{ chip: "p4", revision: d.p4 && d.p4.revision }}
-                          installed={d.p4 && d.p4.fw} chipLabel="P4 (main-core)" confirmText={p4Text}
-                          onInstall={triggerOtaP4} busy={busy} setBusy={setBusy} target="p4" />
-
-            <details class="card">
-                <summary>Advanced: install from URLs</summary>
-                <p class="muted">
-                    For images that are not a published release. Use the <code>-ota.bin</code>{" "}
-                    files; URLs must be reachable from the hub's LAN.
-                </p>
-                <UrlForm label="S3 firmware URL" busy={busy} onFlash={doS3}
-                         placeholder="https://…/zhac-dualchip-s3-v2026….-ota.bin" />
-                <UrlForm label="P4 firmware URL" busy={busy} onFlash={doP4}
-                         placeholder="https://…/zhac-dualchip-p4-v2026….-ota.bin" />
-            </details>
-
-            <Card title="What survives an OTA">
-                <ul class="kv-list">
-                    <li><strong>Zigbee network</strong> — PAN ID, NWK key,
-                        child table. Stored on the CC2652 radio module's own
-                        NV, not touched by either OTA path.</li>
-                    <li><strong>Paired devices</strong> — IEEE list, friendly
-                        names, model_id, manufacturer_name, endpoints, clusters.
-                        Stored in the ESP32 NVS partition, separate from the
-                        firmware slots.</li>
-                    <li><strong>WiFi credentials</strong> — NVS-stored. After
-                        reboot the device joins the same SSID automatically.</li>
-                    <li><strong>Rules + scripts</strong> — rules in NVS,
-                        Lua scripts in SPIFFS. Both survive the OTA.</li>
                 </ul>
             </Card>
         </div>

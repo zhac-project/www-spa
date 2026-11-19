@@ -6,27 +6,18 @@
 // The hub itself never talks to GitHub's API: the browser picks the asset
 // and hands the hub that one download URL, exactly as the URL form does.
 //
-// Asset naming is the contract with the release workflows:
-//   zhac-wired-core:  zhac-wired-<chip>[-rev<N>x]-<tag>-ota.bin   (p4 rev1x, s31)
-//   zhac-platform:    zhac-dualchip-<chip>-<tag>-ota.bin          (s3, p4)
-//   zhac-mono-core:   zhac-mono-<chip>-<tag>-ota.bin
+// Asset naming is the contract with zhac-wired-core's release workflow:
+//   zhac-wired-<chip>[-rev<N>x]-<tag>-ota.bin   (p4 rev1x / rev3x, s31)
 // Only `-ota.bin` files are offered; the full-flash images would overwrite
 // the bootloader and partition table.
 //
-// A name must START with the product prefix of the hub's kind plus its chip
-// token. "Contains -p4- and ends in -ota.bin" is not enough: wired releases
+// A name must START with "zhac-wired-" plus the hub's chip token. "Contains -p4- and ends in -ota.bin" is not enough: wired releases
 // also carry zhac-c6-rcp-installer-p4-rev1x-<tag>-ota.bin (releases from
 // v2026092601 on), a one-off P4 app that writes the C6 radio. It passed that
 // loose test, GitHub lists it before the hub firmware, and installing it
 // took the hub off the network until a power cycle rolled it back.
 
-export const RELEASE_REPO = {
-    wired:  "zhac-wired-core",
-    dual:   "zhac-platform",
-    single: "zhac-mono-core",
-};
-
-const PRODUCT = { wired: "zhac-wired", dual: "zhac-dualchip", single: "zhac-mono" };
+const REPO = "zhac-wired-core";
 
 // "esp32p4" -> "p4", "esp32s31" -> "s31", "esp32s3" -> "s3".
 export function chipToken(target) {
@@ -34,14 +25,13 @@ export function chipToken(target) {
     return m ? m[1] : "";
 }
 
-// Does this release asset fit the hub that asks? `kind` is wired|dual|single
-// (an unknown kind matches nothing); `chip` is the token above;
+// Does this release asset fit the hub that asks? `chip` is the token above;
 // `revision` is esp_chip_info's major*100+minor (v1.3 -> 130). A `rev1x`
 // image covers v0.x–v1.x silicon (the P4's pre-v3 family); `rev3x` covers v3.x.
 // No rev token in the name means the image does not care.
-export function assetMatches(name, { kind, chip, revision } = {}) {
-    if (!name || !PRODUCT[kind] || !chip) return false;
-    if (!name.toLowerCase().startsWith(`${PRODUCT[kind]}-${chip}-`) || !/-ota\.bin$/i.test(name)) return false;
+export function assetMatches(name, { chip, revision } = {}) {
+    if (!name || !chip) return false;
+    if (!name.toLowerCase().startsWith(`zhac-wired-${chip}-`) || !/-ota\.bin$/i.test(name)) return false;
     const rev = /-rev(\d)x-/i.exec(name);
     if (!rev || typeof revision !== "number") return true;
     const family = Number(rev[1]);
@@ -69,12 +59,10 @@ export function compareBuild(installed, tag) {
     return b > a ? "newer" : "older";
 }
 
-// Releases of one repo, newest first, with only the assets that fit `hub`.
+// The hub firmware's releases, newest first, with only the assets that fit `hub`.
 // Throws on network / API errors so the page can fall back to the URL form.
-export async function fetchReleases(kind, hub, fetchImpl = globalThis.fetch) {
-    const repo = RELEASE_REPO[kind];
-    if (!repo) return [];
-    const r = await fetchImpl(`https://api.github.com/repos/zhac-project/${repo}/releases?per_page=10`, {
+export async function fetchReleases(hub, fetchImpl = globalThis.fetch) {
+    const r = await fetchImpl(`https://api.github.com/repos/zhac-project/${REPO}/releases?per_page=10`, {
         headers: { Accept: "application/vnd.github+json" },
     });
     if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
@@ -88,7 +76,7 @@ export async function fetchReleases(kind, hub, fetchImpl = globalThis.fetch) {
             prerelease: !!rel.prerelease,
             sums:      (rel.assets || []).find(a => a.name === "SHA256SUMS")?.browser_download_url || "",
             assets:    (rel.assets || [])
-                .filter(a => assetMatches(a.name, { ...hub, kind }))
+                .filter(a => assetMatches(a.name, hub))
                 .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size || 0 })),
         }))
         .filter(rel => rel.assets.length > 0);

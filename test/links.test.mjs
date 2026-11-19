@@ -4,14 +4,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LINKS } from "../src/links.js";
 
-// Archived repos take no new issues or discussions; only the old releases stay there (LINKS.releases).
+// Archived repos take no new issues or discussions, and their builds are not this hub's.
 const ARCHIVED = /\/(zhac-platform|zhac-mono-core|zhac-net-core|zhac-main-core)\//;
 
-test("no link that asks the user to act points at an archived repo", () => {
-    for (const [key, url] of Object.entries(LINKS)) {
-        if (key === "releases") continue;
-        assert.doesNotMatch(url, ARCHIVED, key);
-    }
+test("no link points at an archived repo", () => {
+    for (const [key, url] of Object.entries(LINKS)) assert.doesNotMatch(url, ARCHIVED, key);
+});
+
+test("the release link is the hub firmware's latest release", () => {
+    assert.equal(LINKS.releases, "https://github.com/zhac-project/zhac-wired-core/releases/latest");
 });
 
 test("bug, device request and discussions go to zhac-docs", () => {

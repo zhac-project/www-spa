@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { call } from "../ws/client.js";
 import { createCrudStore } from "./crud.js";
-import { hubKind } from "./status.js";
 
 // ScriptMeta: { name, size, status? }
 const store = createCrudStore({
@@ -39,22 +38,19 @@ async function postScript(path, src) {
 // Saves go via HTTP POST instead of WS — the esp_http_server WebSocket
 // path caps inbound frames at CONFIG_HTTPD_WS_RECEIVE_BUFFER (~4 KB
 // default) and trips with `httpd_ws_recv_frame: WS Message too long`
-// once a Lua script exceeds that. The REST endpoint handles up to
-// HAP_SCRIPT_MAX_SRC bytes of raw body.
+// once a Lua script exceeds that. The REST endpoint takes up to 16 KB
+// (LUA_SCRIPT_SRC_MAX) of raw body.
 export async function writeScript(name, src) {
     const r = await postScript(`/api/scripts/${encodeURIComponent(name)}`, src);
     try { return await r.json(); } catch (_) { return { ok: true }; }
 }
 
 // The editor's syntax check: {ok, err, line}. A source too long for one
-// WebSocket frame goes over REST, which only the wired and single-chip hubs
-// have: the dual-chip S3 would save it as a script named "check", so there a
-// long source is not checked as it is typed.
+// WebSocket frame goes over REST.
 export async function checkScript(src) {
     try { return await call("script.check", { name: "check", src }); }
     catch (e) {
-        const kind = hubKind();
-        if (e.message !== "too_large" || (kind !== "wired" && kind !== "single")) throw e;
+        if (e.message !== "too_large") throw e;
         return (await postScript("/api/scripts/check/check", src)).json();
     }
 }

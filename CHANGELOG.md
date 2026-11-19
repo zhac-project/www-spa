@@ -18,6 +18,12 @@ across the ZHAC platform.
 
 ### Changed
 
+- **The OTA and Info pages know only the one-board hub** (`src/pages/Ota.jsx`, `src/pages/Info.jsx`,
+  `src/stores/ota.js`, `src/releases.js`, `src/links.js`): the dual-chip page (S3 and P4 cards,
+  `ota.s3` / `ota.p4`) and the dual-chip and single-chip release lookups are gone; the version list
+  reads zhac-wired-core's releases only, "Allow an older version" is always offered, and "Latest
+  release" opens zhac-wired-core. The editor checks a long script over REST whatever the hub
+  reported (`src/stores/scripts.js`). Settings keeps its dual-chip branches for now.
 - **"Report a bug", "Request a device" and Discussions open zhac-docs** (`src/links.js`, CONTRIBUTING): zhac-platform is archived and takes no new issues. A test keeps every link that asks the user to act off the archived repos; the release links of the archived builds stay.
 - **Brand images 108 KB → 17 KB** (`src/assets/brand/`, research 2026-11-18 A14): 64 colours, no dithering, same look side by side. The wired firmware packs the SPA into its app image, so this is ~91 KB of the 6 MB slot.
 

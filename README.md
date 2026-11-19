@@ -1,11 +1,10 @@
 # www-spa
 
 The web UI of [ZHAC], served by the hub itself. Preact 10 + Vite 8, one WebSocket
-(`/ws`) plus a handful of REST calls. The same bundle runs on every ZHAC firmware — the
-dual-chip ESP32-S3, the single-chip ESP32-S3 and the wired ESP32-P4/S31 boards — and
-hides what a given build cannot do.
+(`/ws`) plus a handful of REST calls. It ships inside the hub firmware, zhac-wired-core
+(an ESP32-S31, or an ESP32-P4 with an ESP32-C6 radio).
 
-[ZHAC]: https://github.com/zhac-project/zhac-platform
+[ZHAC]: https://github.com/zhac-project/zhac-docs#readme
 
 | Devices | Device detail | Lua editor |
 |---|---|---|
@@ -51,9 +50,9 @@ Against a real hub instead, change the proxy target in `vite.config.js` to its a
 npm run build        # output in dist/
 ```
 
-The firmware packs `dist/` into a SPIFFS partition. `zhac-net-core` packs its own
-submodule copy; `zhac-wired-core` packs this checkout. `idf.py build` never runs `npm`,
-so build here first.
+The hub firmware, zhac-wired-core, packs `dist/` from this sibling checkout into its app
+image (`tools/pack_spa.py`), so a firmware update brings the UI with it. `idf.py build`
+never runs `npm`, so build here first.
 
 ## Tree
 
@@ -154,5 +153,5 @@ See `CONTRIBUTING.md`. All contributions require signing `CLA.md`.
 
 ## Versioning
 
-Releases tagged `vYYYYMMDDVV`. See `zhac-platform` README for the
-scheme.
+Releases tagged `vYYYYMMDDVV` (date + two-digit revision); zhac-wired-core's
+`release-manifest.json` pins the commit each firmware release uses.

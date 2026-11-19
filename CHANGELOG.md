@@ -18,6 +18,8 @@ across the ZHAC platform.
 
 ### Changed
 
+- **README and ONBOARDING describe the one-board hub**: the SPA ships inside zhac-wired-core's app image (not a SPIFFS partition), the archived repos are named as such, the project link goes to zhac-docs, and the cache and WebSocket notes match the hub.
+- **The archived-repo link test also catches a link that ends at the repo name** (`…/zhac-platform`, `…#readme`, `…?tab=`).
 - **The OTA and Info pages know only the one-board hub** (`src/pages/Ota.jsx`, `src/pages/Info.jsx`,
   `src/stores/ota.js`, `src/releases.js`, `src/links.js`): the dual-chip page (S3 and P4 cards,
   `ota.s3` / `ota.p4`) and the dual-chip and single-chip release lookups are gone; the version list

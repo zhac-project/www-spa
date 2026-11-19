@@ -1,40 +1,38 @@
 # ONBOARDING — www-spa
 
 You are an AI agent arriving on **www-spa**, ZHAC's Preact 10 + Vite 8
-single-page app. This repo builds the Web UI that every ZHAC firmware
-packs into a SPIFFS partition and serves itself: the dual-chip S3
-(`zhac-net-core`), the single-chip S3 (`zhac-mono-core`) and the wired
-P4/S31 (`zhac-wired-core`). Read top-to-bottom before coding.
+single-page app. This repo builds the Web UI that the hub firmware,
+`zhac-wired-core`, packs into its app image and serves itself. Read
+top-to-bottom before coding.
 
 ---
 
 ## 1. Platform context
 
-**ZHAC** = dual-chip ESP32 Zigbee Home Automation Controller.
+**ZHAC** = a Zigbee hub on one ESP32 board, running `zhac-wired-core`:
+an ESP32-S31 with its own 802.15.4 radio, or an ESP32-P4 with an
+ESP32-C6 radio (`ot_rcp`), both on Ethernet.
 
-- **ESP32-P4** runs Zigbee coordination (`zhac-main-core`).
-- **ESP32-S3** runs WiFi / REST / WS / MQTT (`zhac-net-core`).
-- They talk over SPI using the custom **HAP** binary protocol.
 - This SPA speaks **WebSocket** (`/ws`) for everything except a few
   REST calls: the auth probe (`GET /api/status`, `GET /api/devices`),
-  login/first-boot password (`/api/auth/*`) and Lua upload
-  (`POST /api/scripts/:name`, too big for a WS frame).
-- The same bundle runs on all three firmwares. `status.get` tells them
-  apart: `p4` object present = dual-chip, `sku: "wired"` = Ethernet
-  board, neither = single-chip S3. Hide what a build cannot do rather
-  than letting a command fail.
+  login/first-boot password (`/api/auth/*`), Lua upload
+  (`POST /api/scripts/:name`, too big for a WS frame), the full backup
+  (`/api/backup/*`) and device firmware files (`/api/device/ota`).
+- The SPA ships inside the firmware, so it always talks to
+  `zhac-wired-core`. `hubKind()` (`stores/status.js`) still tells the
+  archived dual-chip and single-chip builds apart: Settings keeps their
+  branches for now; the OTA and Info pages know only the one-board hub.
 
 ### Repo split
 
-Tag `v2026042301` (2026-04-23) baseline. Public repos:
-`zhac-platform`, `embedded-zhc`, `zhac-components`, `zhac-main-core`,
-`zhac-net-core`, `zhac-mono-core`, `zhac-wired-core`, **`www-spa`**
+Tag `v2026042301` (2026-04-23) baseline. Live public repos:
+`zhac-wired-core`, `zhac-components`, `embedded-zhc`, **`www-spa`**
 *(this)*, `zhac-docs`. `zhac-wired-core` builds against the sibling
-checkout `../www-spa/dist`; the other firmwares use their own copy.
+checkout `../www-spa/dist`.
 
-This repo is additionally **nested as a submodule inside
-`zhac-net-core/`** so a standalone S3 checkout can still build the
-SPIFFS image.
+Archived (read-only history): `zhac-platform`, `zhac-main-core`,
+`zhac-net-core` (which nested this repo as a submodule) and
+`zhac-mono-core`.
 
 ---
 
@@ -107,11 +105,10 @@ npm run dev               # local dev server (proxies /ws + /api to :8080)
 npm run demo              # fake hub on :8080 — pair it with `npm run dev`
 ```
 
-`dist/` is packed by the firmware's SPIFFS partition generator.
-`zhac-net-core` packs its **submodule** copy (`zhac-net-core/www-spa/dist`),
-`zhac-wired-core` packs the **sibling** checkout (`../www-spa/dist`).
-`idf.py build` never runs `npm run build`: rebuild the SPA in the right
-checkout **before** telling the user to reflash after any UI change.
+`dist/` is packed into `zhac-wired-core`'s app image (`tools/pack_spa.py`)
+from the **sibling** checkout (`../www-spa/dist`). `idf.py build` never
+runs `npm run build`: rebuild the SPA here **before** building the
+firmware after any UI change.
 
 ---
 
@@ -135,16 +132,14 @@ its reply comes back.
 
 ### Push events (no `id`)
 
-- `device.added` / `device.updated` / `device.removed`
-- `attr.bulk` — batched attribute updates
-- `alert.*` — system alerts
+- `device.added` / `device.removed`
+- `attr.changed` / `attr.bulk` — one attribute / batched attribute updates
+- `status.tick` — periodic hub status
 
 Stores subscribe via `/ws` handler; components read via signals.
 
-Full dispatch surface is documented in `zhac-docs/WS_API.md`. On the
-dual-chip S3 every entry maps to a route in
-`zhac-net-core/main/api_routes.def`; the single-chip and wired builds
-dispatch in their own `main/ws_bridge.cpp`.
+Full dispatch surface is documented in `zhac-docs/WS_API.md`; the hub
+dispatches in `zhac-wired-core/main/ws_bridge.cpp`.
 
 ---
 
@@ -214,8 +209,8 @@ of `zhac-docs`.
   context gymnastics.
 - **Lazy-load CodeMirror** (see `vite.config.js` `manualChunks`) — it
   would otherwise dominate the bundle.
-- **WS-only**. Don't `fetch()` the S3 — if a REST endpoint is needed
-  from the UI, add it as a WS command.
+- **WS first**. Don't `fetch()` the hub for something new — add it as a
+  WS command; REST stays for the sign-in calls and uploads in §1.
 - **Send `args:{}` explicitly**, not `undefined`. The server parser
   expects the field.
 - **Don't block the render tree on WS roundtrips.** Use optimistic
@@ -239,13 +234,12 @@ of `zhac-docs`.
 
 ## 9. Gotchas
 
-- **Browser cache.** S3 serves SPIFFS files with weak caching; after
-  reflashing, users often need a hard reload. Bump the `version` in
-  `package.json` if you want Vite to rebust chunk hashes, but the
-  root `index.html` ETag is usually the fastest fix.
+- **Browser cache.** The hub caches the hashed `/assets/*` for a year
+  and revalidates `index.html` every time (`zhac-wired-core/main/spa_serve.cpp`),
+  so an update shows at once: Vite renames every changed asset.
 - **Polling drift.** If you add another `setInterval`, remove it in
   the cleanup — Preact's `useEffect` cleanup is the standard
-  pattern, and orphaned intervals eat S3 CPU.
+  pattern, and orphaned intervals eat hub CPU.
 - **Signals outside React.** Don't create signals inside render —
   they must live at module scope in `stores/`.
 - **WS reconnect storms.** The WS client backs off exponentially;
@@ -283,8 +277,8 @@ build artefact; don't hand-maintain.
 - **REST API** (for external integrations): `zhac-docs/REST_API.md`.
 - **Rules DSL**: `zhac-docs/RULES_DSL.md`.
 - **Lua API**: `zhac-docs/LUA_API.md` (source of autocompletion).
-- **S3 handlers**: `zhac-net-core/main/api_handlers.{h,cpp}` — every
-  WS `cmd` lands in one of these functions.
+- **Hub handlers**: `zhac-wired-core/main/ws_bridge.cpp` — every WS
+  `cmd` lands there; the REST routes are in `main/api_*.cpp`.
 
 ---
 

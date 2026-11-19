@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { otaError, otaStateText, otaPct } from "../src/device_ota.js";
 
 test("every error code the hub sends has words", () => {
-    for (const code of ["no_device", "content_type", "not_an_ota_file", "incomplete", "too_large", "unknown_device",
+    for (const code of ["no_device", "octet_stream_required", "not_an_ota_file", "incomplete", "too_large", "unknown_device",
                         "radio_down", "radio_busy", "busy", "no_memory"]) {
         const t = otaError({ error: code }, 400);
         assert.ok(t && t !== code && !t.startsWith("HTTP"), code);

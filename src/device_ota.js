@@ -6,7 +6,7 @@ const hex = (n, w) => "0x" + (Number(n) >>> 0).toString(16).toUpperCase().padSta
 
 const ERRORS = {
     no_device: "No device was named.",
-    content_type: "The page sent the file in a form the hub does not take.",
+    octet_stream_required: "The page sent the file in a form the hub does not take.",
     not_an_ota_file: "This is not a Zigbee OTA file: there is no OTA header in it.",
     incomplete: "The file did not arrive whole. Try again.",
     too_large: "The file is larger than 4 MB.",

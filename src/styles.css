@@ -1225,3 +1225,14 @@ details.card > summary + * { margin-top: 12px; }
 .netmap-empty p { max-width: 380px; margin: 0; }
 .netmap-progress .ota-progress { height: 8px; margin-top: 4px; }
 
+/* ── Security page (alarm panel, spec 2026-11-24) ────────────────────── */
+.badge-off { background: var(--chip-bg); color: var(--muted); }
+.alarm-state { font-size: var(--text-lg); padding: 4px 12px; margin-bottom: 8px; }
+.card.alarm-wide { flex-basis: 100%; }
+.alarm-card h4 { margin: 16px 0 6px; font-size: var(--text-sm); color: var(--text); }
+.alarm-card .btn-strip { margin-top: 10px; }
+.alarm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.alarm-name { flex: 1 1 160px; font-weight: var(--weight-medium); }
+.alarm-code { max-width: 160px; }
+.alarm-refusal { margin: 12px 0 0; padding: 10px 12px; border-left: 4px solid var(--warn); border-radius: var(--radius-control); background: var(--surface-sunken); }
+

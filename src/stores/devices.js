@@ -73,6 +73,26 @@ export async function getDevice(ieee) {
     return call("device.get", { ieee });
 }
 
+// device.list rows carry no exposes; the pickers (Rules recipes, Security) need them to know which
+// device is a motion sensor and which a light. Fetched once per device and kept, so reopening a
+// picker is instant.
+export const deviceDetails = signal({});   // ieee -> detail (with exposes)
+let detailsLoading = null;
+
+export async function loadDetails() {
+    if (detailsLoading) return detailsLoading;
+    detailsLoading = (async () => {
+        try { if (devices.value.length === 0) await bootstrapDevices(); } catch { /* shown as "no devices" */ }
+        const out = { ...deviceDetails.value };
+        await Promise.all(devices.value.map(async d => {
+            if (out[d.ieee]) return;
+            try { out[d.ieee] = await getDevice(d.ieee); } catch { out[d.ieee] = { ieee: d.ieee, exposes: [] }; }
+        }));
+        deviceDetails.value = out;
+    })();
+    try { await detailsLoading; } finally { detailsLoading = null; }
+}
+
 // No firmware today broadcasts `device.updated` after a rename, so the
 // cached `devices` signal would otherwise keep showing the old name until
 // the next full device.list (e.g. a page reload). Patch it here instead --
@@ -129,7 +149,7 @@ export async function groupsAll() { return call("groups.all", {}); }
 // IEEEs can arrive in mixed case ("0x70C5…" vs the stored lowercase
 // from device.list) depending on which encoder emitted them. Compare
 // case-insensitively so live-update events always find their row.
-function sameIeee(a, b) {
+export function sameIeee(a, b) {
     if (!a || !b) return false;
     return String(a).toLowerCase() === String(b).toLowerCase();
 }

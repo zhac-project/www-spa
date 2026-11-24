@@ -4,38 +4,17 @@
 // surface as toasts.
 import { RULE_TEMPLATES } from "../templates.js";
 import { useEffect, useState } from "preact/hooks";
-import { signal } from "@preact/signals";
 import { status, bootstrapStatus, lendBrowserClock } from "../stores/status.js";
 import { rules, bootstrapRules, createRule, updateRule, enableRule,
          deleteRule as delRuleCall, runRule, ruleStatus, refreshRuleStatus } from "../stores/rules.js";
 import { fmtAgo, fmtSkip } from "../utils.js";
-import { devices, bootstrapDevices, getDevice, setDeviceAttr } from "../stores/devices.js";
+import { devices, bootstrapDevices, setDeviceAttr, deviceDetails, loadDetails } from "../stores/devices.js";
 import { showToast, withToast, SUCCESS } from "../stores/ui.js";
 import { Modal } from "../components/Modal.jsx";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { RuleHelp } from "../components/RuleHelp.jsx";
 import { RECIPES, buildRules, describe, deviceFits, freeTimerIndex, humanize,
          missingField, unknownRefs } from "../recipes.js";
-
-// device.list rows carry no exposes; the pickers need them to know which
-// device is a motion sensor and which a light. Fetched once per page visit,
-// kept here so reopening the modal is instant.
-const deviceDetails = signal({});   // ieee -> detail (with exposes)
-let detailsLoading = null;
-
-async function loadDetails() {
-    if (detailsLoading) return detailsLoading;
-    detailsLoading = (async () => {
-        try { if (devices.value.length === 0) await bootstrapDevices(); } catch { /* shown as "no devices" */ }
-        const out = { ...deviceDetails.value };
-        await Promise.all(devices.value.map(async d => {
-            if (out[d.ieee]) return;
-            try { out[d.ieee] = await getDevice(d.ieee); } catch { out[d.ieee] = { ieee: d.ieee, exposes: [] }; }
-        }));
-        deviceDetails.value = out;
-    })();
-    try { await detailsLoading; } finally { detailsLoading = null; }
-}
 
 function nameOf(ref) {
     const d = devices.value.find(x => x.ieee === ref);

@@ -53,6 +53,10 @@ pwm.set <pin> <0-100>                  // duty in percent for a pwm pin`}</pre>
             <code>ON Hub I/O#button=1 DO gpio.toggle relay ENDON</code></p>
             <p class="field-hint">Device names in actions are a single token, no quotes — rename
             devices with spaces (e.g. <code>kitchen_light</code>) or use the IEEE address.</p>
+            <p class="field-hint"><code>zigbee.set</code> sends a value that is not a number as text:
+            <code>zigbee.set Lamp effect colorloop</code>, <code>zigbee.set Alarm alarm_state armed_away</code>.
+            IAS WD sirens take <code>warning</code> as text <code>mode[,level[,strobe[,duration]]]</code>,
+            e.g. <code>zigbee.set Siren warning burglar,high,1,180</code>. A value is one word, no spaces.</p>
 
             <h4>Value substitution &amp; expressions</h4>
             <p><code>zigbee.set</code> values and <code>publish</code> payloads accept the trigger
@@ -87,6 +91,7 @@ ON Rules#Timer=1 DO zigbee.set hallway_light state 0 ENDON`}</pre>
                 <li>Actions per rule: 4</li>
                 <li>Device name: 29 chars</li>
                 <li>Attribute key: 27 chars</li>
+                <li><code>zigbee.set</code> value: 19 chars</li>
                 <li>Cron expression: 63 chars</li>
                 <li>Event name: 63 chars</li>
                 <li>MQTT topic: 63 chars</li>

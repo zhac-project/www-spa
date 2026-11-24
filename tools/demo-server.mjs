@@ -20,6 +20,8 @@
 //   DEMO_STORAGE_ERROR=1 npm run demo  # NVS unusable at boot: Settings offers "Erase storage and restart"
 //   DEMO_JOIN=unsupported npm run demo # "Add a device": the joining device has no definition
 //   DEMO_JOIN=none npm run demo        # "Add a device": nothing joins (the two-minute timeout path)
+//   DEMO_DOOR_OPEN=1 npm run demo      # Security: the front door is open, so arming is refused until forced
+//   DEMO_ALARM_TRIP=1 npm run demo     # Security: 5 s after arming a guarded sensor goes off (entry delay, siren)
 //
 // Payload shapes mirror zhac-wired-core's real replies (ws_bridge.cpp,
 // api_status.cpp): same keys, same units, floats already divided by 100.
@@ -73,7 +75,7 @@ const DEVICES = [
     { ieee: "0xA4C1386F0D3E2A19", nwk: 0x5B90, name: "front_door", vendor: "Tuya", model: "TS0203",
       manufacturer: "HOBEIAN", model_id: "ZG-102ZM", power_source: "Battery", lqi: 96, battery: 100, seen: 1800,
       exposes: [{ name: "contact", type: "binary", access: 1 }, { name: "tamper", type: "binary", access: 1 }, { name: "battery_low", type: "binary", access: 1, category: "diagnostic" }],
-      attrs: { contact: 1, tamper: 0, battery_low: 0 } },
+      attrs: { contact: process.env.DEMO_DOOR_OPEN ? 0 : 1, tamper: 0, battery_low: 0 } },
     { ieee: "0x00158D00045F6E7D", nwk: 0x2A6D, name: "bedroom_climate", vendor: "Aqara", model: "WSDCGQ11LM",
       manufacturer: "LUMI", model_id: "lumi.weather", power_source: "Battery", lqi: 121, battery: 64, seen: 300,
       exposes: [num("temperature", "°C"), num("humidity", "%"), num("pressure", "hPa"), diag("battery", "%")],
@@ -96,6 +98,19 @@ const DEVICES = [
                    .map((day) => [`schedule_${day}`, "06:00/21.0 08:00/17.0 17:00/21.0 22:00/17.0"])),
                schedule_saturday: "08:00/21.0 12:00/20.0 17:00/21.0 23:00/17.0",
                schedule_sunday: "08:00/21.0 12:00/20.0 17:00/21.0 22:00/17.0" } },
+    // A Tuya siren (Security: signal `alarm`, melody and volume) and a button (Security: arm with a button).
+    { ieee: "0xA4C1381C5D7E9F20", nwk: 0x3B55, name: "hall_siren", vendor: "NEO", model: "NAS-AB02B0",
+      manufacturer: "_TZE200_d0yu2xgi", model_id: "TS0601", power_source: "Mains (single phase)", lqi: 164, battery: 0, seen: 25,
+      exposes: [{ name: "alarm", type: "binary", access: 3 },
+                { name: "melody", type: "enum", access: 3, values: Array.from({ length: 18 }, (_, i) => String(i + 1)) },
+                { name: "volume", type: "enum", access: 3, values: ["low", "medium", "high"] },
+                { name: "duration", type: "numeric", access: 3, unit: "s", value_min: 0, value_max: 1800 }],
+      attrs: { alarm: 0, melody: "5", volume: "high", duration: 60 } },
+    { ieee: "0x00158D00083F2A61", nwk: 0x6F02, name: "hall_button", vendor: "Aqara", model: "WXKG11LM",
+      manufacturer: "LUMI", model_id: "lumi.sensor_switch.aq2", power_source: "Battery", lqi: 118, battery: 91, seen: 3600,
+      exposes: [{ name: "action", type: "enum", access: 1, values: ["single", "double", "triple", "quadruple", "hold", "release"] },
+                diag("battery", "%")],
+      attrs: { battery: 91 } },
 ];
 const RULES = [
     { id: 1, enabled: true, trigger_type: 0, rule_type: 0, name: "Hallway light on motion",
@@ -127,6 +142,14 @@ end)
 `,
 };
 if (process.env.DEMO_EMPTY) DEVICES.length = 0;   // first-boot look: nothing paired yet
+// The hub's own Alarm device (alarm.cpp): always there, PROTO_LOCAL, so the rows say `local`.
+const ALARM_IEEE = "0x025A484143414C00";
+DEVICES.push({ ieee: ALARM_IEEE, nwk: 0xFFFE, name: "Alarm", vendor: "ZHAC", model: "ZHAC-ALARM", manufacturer: "ZHAC",
+    model_id: "ZHAC-ALARM", power_source: "Mains (single phase)", lqi: 0, battery: 0, seen: 30, local: true,
+    exposes: [{ name: "alarm_state", type: "enum", access: 7,
+                values: ["disarmed", "arming", "armed_away", "armed_home", "armed_night", "pending", "triggered"] },
+              { name: "alarm_sensor", type: "text", access: 1 }],
+    attrs: { alarm_state: "disarmed", alarm_sensor: "" } });
 const GROUPS = { groups: [{ id: 1, name: "living_room", members: DEVICES.slice(1, 3).map((d) => d.ieee) }] };
 let permitUntil = 0;
 
@@ -175,7 +198,7 @@ function status() {
 }
 const row = (d) => ({ ieee: d.ieee, nwk: d.nwk, friendly: d.name, name: d.name, model: d.model, model_id: d.model_id, known: !!d.model,
     manufacturer: d.manufacturer, vendor: d.vendor, last_seen: now() - d.seen, lqi: d.lqi,
-    battery: d.battery, ep_count: 1 });
+    battery: d.battery, ep_count: 1, ...(d.local ? { local: true } : {}) });
 const detail = (d) => ({ ...row(d), model_id: d.model_id, mfr: 0, power_source: d.power_source,
     type: d.power_source === "Battery" ? "EndDevice" : "Router", bat_pct: d.battery,
     eps: [1], clusters: [[0, 1, 6]], attrs: d.attrs, exposes: d.exposes });
@@ -197,6 +220,46 @@ let demoClockSet = !process.env.DEMO_CLOCK_UNSET;
 let demoNtpServer = "pool.ntp.org";
 let demoTz = "";
 let demoMetrics = false, demoMetricsMqtt = false, demoMetricsSecs = 60;
+
+// ── alarm panel (alarm.cpp / alarm_core.cpp): arm away goes arming → armed_away after the exit delay ──
+const CLIENTS = new Set();   // each open page's push(), for alarm.changed
+const broadcast = (event, data) => { for (const push of CLIENTS) push(event, data); };
+const ALARM_CFG = {
+    exit_delay: 10, entry_delay: 10, siren_time: 30, notify_arm: false,
+    sensors: DEVICES.filter((d) => d.name === "front_door" || d.name === "hallway_motion").map((d) => d.name === "front_door"
+        ? { ieee: d.ieee, modes: ["away", "home", "night"], entry: true } : { ieee: d.ieee, modes: ["away"], entry: false }),
+    sirens: DEVICES.filter((d) => d.name === "hall_siren").map((d) => ({ ieee: d.ieee, kind: "alarm", melody: "5", volume: "high" })),
+    keypads: [], codes: ["1234"],
+};
+const alarm = { state: "disarmed", mode: "away", since: now(), until: 0, cause: "", bypassed: [], timer: null };
+function alarmStatus() {   // alarm_status_json: left only while counting, cause/sensor only for pending/triggered
+    const s = { state: alarm.state, mode: alarm.mode, since: demoClockSet ? alarm.since : 0 };
+    if (alarm.until) s.left = Math.max(0, alarm.until - now());
+    if (alarm.cause) { s.cause = alarm.cause; s.sensor = find(alarm.cause)?.name || alarm.cause; }
+    return { ...s, bypassed: alarm.bypassed };
+}
+// A change: the new state, its countdown and what follows it; alarm.changed to every open page.
+function alarmGo(state, secs = 0, then = null, cause = "") {
+    clearTimeout(alarm.timer);
+    Object.assign(alarm, { state, cause, since: now(), until: secs ? now() + secs : 0,
+                           timer: secs && then ? setTimeout(then, secs * 1000) : null });
+    find(ALARM_IEEE).attrs.alarm_state = state;
+    broadcast("alarm.changed", alarmStatus());
+}
+function alarmArmed() {
+    alarmGo(`armed_${alarm.mode}`);
+    if (process.env.DEMO_ALARM_TRIP) alarm.timer = setTimeout(alarmTrip, 5000);
+}
+function alarmTrip() {   // a guarded sensor goes off: the entry delay first for an entry sensor
+    const guards = ALARM_CFG.sensors.filter((x) => x.modes.includes(alarm.mode) && !alarm.bypassed.includes(x.ieee));
+    const s = guards.find((x) => x.entry) || guards[0];   // the door first: shows the entry delay
+    if (!s) return;
+    const back = `armed_${alarm.mode}`;
+    const fire = () => alarmGo("triggered", ALARM_CFG.siren_time, () => alarmGo(back), s.ieee);
+    if (s.entry && ALARM_CFG.entry_delay) alarmGo("pending", ALARM_CFG.entry_delay, fire, s.ieee);
+    else fire();
+}
+
 const COMMANDS = {
     "status.get": status,
     // Same rule as the firmware (zap_clock.h): fills an unset clock only.
@@ -237,6 +300,47 @@ const COMMANDS = {
     "rule.enable": (a, push) => {
         const r = RULES.find((x) => x.id === a.id); if (!r) throw new Error("no such rule");
         r.enabled = !!a.enabled; push("rule.updated", { id: r.id, enabled: r.enabled }); return {};
+    },
+    "alarm.get": () => {
+        const { codes, ...config } = ALARM_CFG;
+        return { ...alarmStatus(), config: { ...config, codes_count: codes.length } };
+    },
+    "alarm.arm": (a) => {
+        if (!["away", "home", "night"].includes(a.mode)) throw new Error("mode must be away, home or night");
+        if (alarm.state === "pending" || alarm.state === "triggered") throw new Error("the alarm is on: disarm first");
+        if (alarm.state === `armed_${a.mode}` || (alarm.state === "arming" && alarm.mode === a.mode)) return { armed: true };
+        // Only open contacts block, and only without force; forced, they are bypassed until disarm.
+        const open = ALARM_CFG.sensors.filter((s) => s.modes.includes(a.mode) && find(s.ieee)?.attrs.contact === 0).map((s) => s.ieee);
+        if (open.length && !a.force) return { armed: false, open: open.map((ieee) => (find(ieee)?.name ? { ieee, name: find(ieee).name } : { ieee })) };
+        Object.assign(alarm, { mode: a.mode, bypassed: open });
+        if (a.mode === "away" && ALARM_CFG.exit_delay) alarmGo("arming", ALARM_CFG.exit_delay, alarmArmed);
+        else alarmArmed();
+        return { armed: true };
+    },
+    "alarm.disarm": () => {
+        if (alarm.state !== "disarmed") { alarm.bypassed = []; alarmGo("disarmed"); }
+        return {};
+    },
+    // The whole config; left-out fields take the defaults, left-out codes keep the stored ones. A few of the
+    // hub's checks, worded as it words them (alarm_core.cpp alarm_cfg_from_json, alarm.cpp alarm_config_set).
+    "alarm.config.set": (a) => {
+        const c = a.config;
+        if (!c || typeof c !== "object") throw new Error("missing config");
+        const range = (k, lo, hi) => {
+            if (c[k] !== undefined && !(Number.isInteger(c[k]) && c[k] >= lo && c[k] <= hi)) throw new Error(`${k} must be ${lo}-${hi} s`);
+        };
+        range("exit_delay", 0, 300); range("entry_delay", 0, 300); range("siren_time", 10, 1800);
+        for (const k of ["sensors", "sirens", "keypads"]) {
+            (c[k] || []).forEach((x, i) => {
+                if (!find(x.ieee) || find(x.ieee).ieee === ALARM_IEEE) throw new Error(`${k}[${i}]: ${x.ieee} is not a device on this hub`);
+            });
+        }
+        (c.sensors || []).forEach((s, i) => { if (!s.modes?.length) throw new Error(`sensors[${i}]: no mode, so it never guards`); });
+        (c.codes || []).forEach((k, i) => { if (!/^\d{4,8}$/.test(k)) throw new Error(`codes[${i}]: a code is 4-8 digits, as text`); });
+        const { codes, codes_count: _n, ...rest } = c;
+        Object.assign(ALARM_CFG, { exit_delay: 30, entry_delay: 30, siren_time: 180, notify_arm: false, sensors: [], sirens: [], keypads: [] },
+                      rest, codes ? { codes } : {});
+        return {};
     },
     "group.create": (a) => {
         const g = { id: Math.max(0, ...GROUPS.groups.map((x) => x.id)) + 1, name: a.name, members: [] };
@@ -339,7 +443,8 @@ function onUpgrade(req, sock) {
     });
     sock.on("error", () => {});
     const tick = setInterval(() => push("status.tick", { uptime: now() - BOOT, cpu_c0: 2 + (now() % 4) }), 5000);
-    sock.on("close", () => clearInterval(tick));
+    CLIENTS.add(push);
+    sock.on("close", () => { clearInterval(tick); CLIENTS.delete(push); });
 }
 
 // ── HTTP: the REST calls the UI makes, then static dist/ ───────────────────

@@ -21,6 +21,7 @@ across the ZHAC platform.
 
 ### Changed
 
+- **The WebSocket client sends frames up to 32 KB** (`src/ws/frame.js`), as the hub takes them since zhac-components 8583cb5 (8 KB before): the largest Safety config is about 22 KB, and it must pass in one frame. The script editor's syntax check now sends a source of up to 32 KB on the socket; a longer one still goes over REST.
 - **README and ONBOARDING describe the one-board hub**: the SPA ships inside zhac-wired-core's app image (not a SPIFFS partition), the archived repos are named as such, the project link goes to zhac-docs, and the cache and WebSocket notes match the hub.
 - **The archived-repo link test also catches a link that ends at the repo name** (`…/zhac-platform`, `…#readme`, `…?tab=`).
 - **The OTA and Info pages know only the one-board hub** (`src/pages/Ota.jsx`, `src/pages/Info.jsx`,

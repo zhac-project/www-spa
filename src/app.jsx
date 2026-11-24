@@ -22,7 +22,7 @@ import { MapPage }          from "./pages/Map.jsx";
 import { netmapSupported }  from "./stores/netmap.js";
 import { GroupsPage }       from "./pages/Groups.jsx";
 import { ZclGroupsPage }    from "./pages/ZclGroups.jsx";
-import { SecurityPage }     from "./pages/Security.jsx";
+import { SafetyPage }       from "./pages/Safety.jsx";
 import { RulesPage }        from "./pages/Rules.jsx";
 import { ScriptsPage }      from "./pages/Scripts.jsx";
 import { LogsPage }         from "./pages/Logs.jsx";
@@ -42,7 +42,7 @@ const NAV = [
     { id: "map",      label: "Map" },
     { id: "groups",   label: "Collections" },
     { id: "zclgroups", label: "Groups" },
-    { id: "security", label: "Security" },
+    { id: "safety",   label: "Safety" },
     { id: "rules",    label: "Rules" },
     { id: "scripts",  label: "Scripts" },
     { id: "log",      label: "Log" },
@@ -160,7 +160,7 @@ function AppShell() {
                     {page === "map"      && <MapPage />}
                     {page === "groups"   && <GroupsPage />}
                     {page === "zclgroups" && <ZclGroupsPage />}
-                    {page === "security" && <SecurityPage />}
+                    {page === "safety"   && <SafetyPage />}
                     {page === "rules"    && <RulesPage />}
                     {page === "scripts"  && <ScriptsPage />}
                     {page === "log"      && <LogsPage />}

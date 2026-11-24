@@ -1225,7 +1225,7 @@ details.card > summary + * { margin-top: 12px; }
 .netmap-empty p { max-width: 380px; margin: 0; }
 .netmap-progress .ota-progress { height: 8px; margin-top: 4px; }
 
-/* ── Security page (alarm panel, spec 2026-11-24) ────────────────────── */
+/* ── Safety page (alarm profiles, spec 2026-11-24) ───────────────────── */
 .badge-off { background: var(--chip-bg); color: var(--muted); }
 .alarm-state { font-size: var(--text-lg); padding: 4px 12px; margin-bottom: 8px; }
 .card.alarm-wide { flex-basis: 100%; }
@@ -1235,4 +1235,36 @@ details.card > summary + * { margin-top: 12px; }
 .alarm-name { flex: 1 1 160px; font-weight: var(--weight-medium); }
 .alarm-code { max-width: 160px; }
 .alarm-refusal { margin: 12px 0 0; padding: 10px 12px; border-left: 4px solid var(--warn); border-radius: var(--radius-control); background: var(--surface-sunken); }
+.safety-add { display: inline-flex; align-items: center; gap: 6px; }
+.safety-menu-wrap { position: relative; }
+.safety-menu {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 10; width: 250px; padding: 4px;
+    display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); box-shadow: var(--shadow-3);
+}
+.safety-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: transparent; text-align: left; }
+.safety-menu button:hover { background: var(--surface-hover); }
+.safety-menu .muted { margin-left: auto; }
+.safety-menu-sep { height: 1px; margin: 4px 0; background: var(--border); }
+.safety-icon { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
+.safety-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.safety-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.safety-card.triggered { border-left: 4px solid var(--danger); }
+.safety-card.editing { border-color: var(--blue); }
+.safety-card-head { display: flex; align-items: center; gap: 8px; }
+.safety-name { font-size: var(--text-md); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.safety-card .alarm-state { margin-bottom: 0; white-space: nowrap; }
+.safety-card .alarm-refusal { margin: 0; }
+.safety-card .kv-table th { width: 150px; }
+.safety-count { font-size: var(--text-md); font-variant-numeric: tabular-nums; }
+.safety-card > .btn-strip { margin-top: auto; padding-top: 4px; }
+.safety-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
+.safety-editor { margin-bottom: 16px; scroll-margin-top: 64px; }   /* its title clear of the sticky 48 px header */
+.safety-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0 16px; }
+.safety-fixed { margin: 6px 0; font-size: var(--text-sm); }
+.safety-fixed-val { display: flex; align-items: center; gap: 6px; padding: 8px 0; font-size: var(--text-base); }
+@media (max-width: 800px) {
+    .safety-grid { grid-template-columns: minmax(0, 1fr); }
+    .safety-page .toolbar button, .safety-card > .btn-strip button { min-height: 44px; }
+}
 

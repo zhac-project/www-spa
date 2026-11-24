@@ -27,7 +27,8 @@ export const SUCCESS = Symbol("withToast.success");
 //   #/info
 //   #/devices, #/map
 //   #/device/<ieee>
-//   #/groups, #/zclgroups, #/security, #/rules, #/scripts, #/log, #/diag, #/ota, #/settings
+//   #/groups, #/zclgroups, #/safety, #/rules, #/scripts, #/log, #/diag, #/ota, #/settings
+//   #/security opens the Safety page (its name before alarm profiles)
 //
 // `navigate(page, { ieee })` writes the corresponding hash; the
 // `hashchange` listener drives `ui.activePage` so back/forward, manual
@@ -35,7 +36,7 @@ export const SUCCESS = Symbol("withToast.success");
 // when the new state already matches (avoids history-spam on re-clicks).
 // ---------------------------------------------------------------------------
 const VALID_PAGES = new Set([
-    "info", "devices", "device", "map", "groups", "zclgroups", "security", "rules",
+    "info", "devices", "device", "map", "groups", "zclgroups", "safety", "rules",
     "scripts", "log", "diag", "ota", "settings",
 ]);
 
@@ -52,7 +53,7 @@ function parseHash(hash) {
     if (h.startsWith("/")) h = h.slice(1);
     if (!h) return { page: "info", ieee: null };
     const parts = h.split("/").filter(Boolean);
-    const page = parts[0];
+    const page = parts[0] === "security" ? "safety" : parts[0];
     if (!VALID_PAGES.has(page)) return { page: "info", ieee: null };
     if (page === "device") {
         const ieee = parts[1] ? decodeURIComponent(parts[1]) : null;

@@ -89,9 +89,12 @@ test("templates: the three modes are offered only while their role is free", () 
     assert.deepEqual(TEMPLATES.map((t) => [t.profile.arm_delay, t.profile.trigger_delay, t.profile.notify_arm]),
         [[30, 30, false], [0, 30, false], [0, 30, false], [30, 30, false], [0, 0, true], [0, 0, true], [0, 0, true], [0, 0, false]]);
     assert.equal(TEMPLATES.find((t) => t.key === "custom").profile.name, "Custom");
-    const away = TEMPLATES[0].profile;
-    newProfile(TEMPLATES[0], { profiles: [] }).sensors.push("x");
-    assert.deepEqual(TEMPLATES[0].profile, away, "a new profile is a copy: the template stays as it was");
+    const before = structuredClone(TEMPLATES);
+    for (const t of TEMPLATES) {
+        const p = newProfile(t, { profiles: [] });
+        p.name = "x"; p.arm_delay = 99; p.sensors.push("x"); p.outputs.push("x");
+    }
+    assert.deepEqual(TEMPLATES, before, "a new profile is a copy: changing it leaves the templates as they were");
     for (const t of TEMPLATES)   // what the hub takes as an id
         assert.match(newProfile(t, { profiles: [] }).id, /^[a-z][a-z0-9_]{0,12}$/, t.key);
 });

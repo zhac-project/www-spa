@@ -14,7 +14,7 @@ import { isLocal } from "../utils.js";
 import { Card } from "../components/Card.jsx";
 import { ALARM_IEEE, STATES, CLASSES, ROLES, WD_MODES, WD_LEVELS, stateLabel, stateKind, countdownLabel, leftNow,
          fmtLeft, classLabel, isSensor, suits, outputKind, newOutput, withValue, proposeId, templatesFor, newProfile,
-         running, notGuarding, configToSend, settable, ruleRef, valueChoices, reactionRule, buttonRule } from "../alarm.js";
+         running, notGuarding, configToSend, settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer } from "../alarm.js";
 
 const rowOf = (ieee) => devices.value.find((d) => sameIeee(d.ieee, ieee));
 const nameOf = (ieee) => { const d = rowOf(ieee); return (d && (d.name || d.friendly)) || ieee; };
@@ -62,8 +62,15 @@ export function SafetyPage() {
             setErr("");
         } catch (e) { setErr(e.message); }
     }
+    const cfgNow = useRef(null);   // for the push handler, registered once
+    cfgNow.current = cfg;
     useEffect(() => onOpen(load), []);   // and again after each reconnect
-    useEffect(() => on("alarm.changed", (s) => { if (s && s.profiles) setSt({ ...s, at: Date.now() }); }), []);
+    useEffect(() => on("alarm.changed", (s) => {
+        if (!s || !s.profiles) return;
+        setSt({ ...s, at: Date.now() });
+        // Profiles added, deleted or moved in another tab: the config again. An open editor keeps its draft.
+        if (cfgNow.current && profilesDiffer(cfgNow.current, s)) load();
+    }), []);
     useEffect(() => { loadDetails().finally(() => setReady(true)); }, []);
 
     async function disarmAll() {

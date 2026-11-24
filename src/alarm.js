@@ -47,11 +47,12 @@ export function outputKind(exposes) {
     return canSet(named(exposes, "state")) ? "state" : "";
 }
 const WD_MODE_OF = { fire: "fire", intrusion: "burglar" };
-export const newOutput = (ieee, kind, cls) =>
-    kind === "warning" ? { ieee, kind, mode: WD_MODE_OF[cls] || "emergency", level: "high", strobe: true }
-    : kind === "state" ? { ieee, kind, value: "on", keep: false } : { ieee, kind };
+const CLOSES = ["water", "gas"];   // their switch is a valve: the alarm closes it, and it stays closed
 // A switch that goes off ticks `keep` (it stays off after the alarm ends); on clears it.
 export const withValue = (output, value) => ({ ...output, value, keep: value === "off" });
+export const newOutput = (ieee, kind, cls) =>
+    kind === "warning" ? { ieee, kind, mode: WD_MODE_OF[cls] || "emergency", level: "high", strobe: true }
+    : kind === "state" ? withValue({ ieee, kind }, CLOSES.includes(cls) ? "off" : "on") : { ieee, kind };
 
 // An id for a new profile, as the hub takes one: 1-13 of a-z, 0-9, _, starting with a letter, not reserved.
 const RESERVED = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered"];
@@ -84,6 +85,14 @@ export function templatesFor(cfg) {
     return TEMPLATES.filter((t) => !taken.includes(t.profile.role));
 }
 export const newProfile = (t, cfg) => ({ ...t.profile, id: proposeId(t.key, cfg.profiles), sensors: [], outputs: [] });
+
+// alarm.changed lists every profile's status in config order: other ids (a profile added, deleted or moved in another
+// tab) mean the loaded config is old and alarm.get is due. A push without profiles says nothing about them.
+export function profilesDiffer(cfg, st) {
+    if (!st?.profiles) return false;
+    const have = (cfg?.profiles || []).map((p) => p.id), now = st.profiles.map((p) => p.id);
+    return have.length !== now.length || have.some((id, i) => id !== now[i]);
+}
 
 // Save is off while a profile is arming, pending or triggered; a disarmed hazard profile guards nothing.
 const ACTIVE = ["arming", "pending", "triggered"];

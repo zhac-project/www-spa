@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ALARM_IEEE, stateLabel, stateKind, countdownLabel, classLabel, leftNow, fmtLeft, isSensor, suits, outputKind,
          newOutput, withValue, proposeId, TEMPLATES, templatesFor, newProfile, running, notGuarding, configToSend,
-         settable, ruleRef, valueChoices, reactionRule, buttonRule } from "../src/alarm.js";
+         settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer } from "../src/alarm.js";
 
 const bin = (name, access = 3) => ({ name, type: "binary", access });
 
@@ -57,10 +57,26 @@ test("a new output starts as its class needs", () => {
     assert.deepEqual(newOutput("0x1", "warning", "fire"), { ieee: "0x1", kind: "warning", mode: "fire", level: "high", strobe: true });
     assert.equal(newOutput("0x1", "warning", "intrusion").mode, "burglar");
     assert.equal(newOutput("0x1", "warning", "water").mode, "emergency");
-    assert.deepEqual(newOutput("0x1", "state", "water"), { ieee: "0x1", kind: "state", value: "on", keep: false });
+    // A switch in a water or gas profile is a valve: closed by the alarm, and it stays closed (review F10).
+    assert.deepEqual(newOutput("0x1", "state", "water"), { ieee: "0x1", kind: "state", value: "off", keep: true });
+    assert.deepEqual(newOutput("0x1", "state", "gas"), { ieee: "0x1", kind: "state", value: "off", keep: true });
+    for (const cls of ["intrusion", "fire", "other"])
+        assert.deepEqual(newOutput("0x1", "state", cls), { ieee: "0x1", kind: "state", value: "on", keep: false }, cls);
     assert.deepEqual(withValue({ ieee: "0x1", kind: "state", value: "on", keep: false }, "off"), { ieee: "0x1", kind: "state", value: "off", keep: true });
     assert.equal(withValue({ ieee: "0x1", kind: "state", value: "off", keep: true }, "on").keep, false);
     assert.deepEqual(newOutput("0x1", "alarm", "fire"), { ieee: "0x1", kind: "alarm" });
+});
+
+test("a push that lists other profiles than the loaded config asks for the config again", () => {
+    const cfg = { profiles: [{ id: "away" }, { id: "flood" }] };
+    const st = (...ids) => ({ profiles: ids.map((id) => ({ id, state: "armed" })) });
+    assert.equal(profilesDiffer(cfg, st("away", "flood")), false, "the same profiles: only the states change");
+    assert.equal(profilesDiffer(cfg, st("away", "flood", "fire")), true, "a profile added elsewhere");
+    assert.equal(profilesDiffer(cfg, st("away")), true, "a profile deleted elsewhere");
+    assert.equal(profilesDiffer(cfg, st("away", "fire")), true, "one deleted and another added");
+    assert.equal(profilesDiffer(cfg, st("flood", "away")), true, "the order changed");
+    assert.equal(profilesDiffer({ profiles: [] }, st()), false, "no profiles on either side");
+    assert.equal(profilesDiffer(cfg, {}), false, "a push without profiles says nothing about them");
 });
 
 test("an id is proposed from the name", () => {

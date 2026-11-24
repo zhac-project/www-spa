@@ -5,7 +5,7 @@
 // push), sends arm, disarm and silence, edits the config the hub checks on alarm.config.set (a refusal is shown as
 // the hub words it), and saves the shortcuts as ordinary rules. Words, templates and rule text: src/alarm.js.
 import { Fragment } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { call, on, onOpen } from "../ws/client.js";
 import { devices, deviceDetails, loadDetails, sameIeee } from "../stores/devices.js";
 import { createRule } from "../stores/rules.js";
@@ -23,8 +23,9 @@ const others = () => devices.value.filter((d) => !isLocal(d));   // not the hub'
 const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const SAVE_OFF = "Save is off while an alarm is running: disarm it or wait until it ends.";
 
-// alarm.config.set with the hub's config as it is now, changed by `change`: a save here never undoes one made
-// elsewhere (another tab) since this page last read the config. `codes` as configToSend takes them.
+// alarm.config.set with the hub's config as it is now, changed by `change`. `change` puts this tab's copy of one
+// part in place (the edited profile, or the whole keypads list) and the rest goes back as the hub has it, so a
+// change made elsewhere to another profile stays. `codes` as configToSend takes them.
 async function saveConfig(change, codes = null) {
     const { config } = await call("alarm.get");
     await call("alarm.config.set", { config: configToSend(change(config), codes) });
@@ -52,7 +53,6 @@ export function SafetyPage() {
     const [ready, setReady] = useState(false);   // device exposes read: the pickers need them
     const [edit, setEdit] = useState(null);  // {p, isNew, key}: the profile in the editor, as edited so far
     const [busy, setBusy] = useState(false);
-    const editor = useRef(null);
 
     async function load() {
         try {
@@ -83,24 +83,24 @@ export function SafetyPage() {
                 <h2>Safety</h2>
                 <span class="toolbar-spacer" />
                 <button class="primary" disabled={!st || busy} onClick={disarmAll}>Disarm</button>
-                <AddMenu cfg={cfg} onPick={(t) => open(newProfile(t, cfg), true)} />
+                <AddMenu cfg={cfg} disabled={!cfg || !!edit} onPick={(t) => open(newProfile(t, cfg), true)} />
             </div>
             <p class="field-hint" style="margin: -4px 0 12px">Disarm switches off the intrusion profiles and silences any
                 other alarm. A flood or fire profile stays armed.</p>
             {err && <p class="error-text">{err}</p>}
             {cfg && (
                 <div class="safety-grid">
-                    {profiles.map((p) => {
-                        const editing = edit?.isNew === false && edit.p.id === p.id;
-                        return <ProfileCard key={p.id} p={p} s={(st?.profiles || []).find((x) => x.id === p.id)} at={st?.at}
-                                            warn={notGuarding(p, st)} editing={editing} reload={load}
-                                            onEdit={() => (editing ? editor.current?.scrollIntoView({ block: "start" }) : open(p, false))} />;
-                    })}
+                    {/* While the editor is open, Edit and Add are off: its Save or Cancel closes it first. */}
+                    {profiles.map((p) => (
+                        <ProfileCard key={p.id} p={p} s={(st?.profiles || []).find((x) => x.id === p.id)} at={st?.at}
+                                     warn={notGuarding(p, st)} editing={edit?.isNew === false && edit.p.id === p.id}
+                                     locked={!!edit} reload={load} onEdit={() => open(p, false)} />
+                    ))}
                 </div>
             )}
             {cfg && !ready && <p class="field-hint">Reading what your devices can do…</p>}
             {cfg && ready && edit && (
-                <ProfileEditor key={edit.key} box={editor} edit={edit} setEdit={setEdit} profiles={profiles} st={st} saved={load} />
+                <ProfileEditor key={edit.key} edit={edit} setEdit={setEdit} profiles={profiles} st={st} saved={load} />
             )}
             {cfg && ready && (
                 <div class="cards">
@@ -112,31 +112,46 @@ export function SafetyPage() {
     );
 }
 
-// "+ Add profile": the templates, in a menu that Escape or a click elsewhere closes.
-function AddMenu({ cfg, onPick }) {
+// "+ Add profile": the templates as a menu (the menu button pattern). It opens with focus on its first item; the
+// arrow keys, Home and End move between the items; Escape, or the button again, closes it and gives focus back to
+// the button. A click elsewhere or Tab closes it and leaves focus where it went; a pick opens the editor, which
+// takes focus.
+function AddMenu({ cfg, disabled, onPick }) {
     const [open, setOpen] = useState(false);
     const wrap = useRef(null);
-    useEffect(() => {
+    const button = useRef(null);
+    const items = () => [...(wrap.current?.querySelectorAll("[role=menuitem]") || [])];
+    useLayoutEffect(() => {   // in the frame the menu appears: no click can come before its focus and listener
         if (!open) return;
+        items()[0]?.focus();
         const away = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
-        const esc = (e) => { if (e.key === "Escape") setOpen(false); };
         document.addEventListener("pointerdown", away);
-        document.addEventListener("keydown", esc);
-        return () => { document.removeEventListener("pointerdown", away); document.removeEventListener("keydown", esc); };
+        return () => document.removeEventListener("pointerdown", away);
     }, [open]);
+    function keys(e) {
+        if (!open) return;
+        if (e.key === "Tab") { setOpen(false); return; }
+        const list = items(), i = list.indexOf(document.activeElement);
+        const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
+        if (e.key === "Escape") { setOpen(false); button.current?.focus(); }
+        else if (to !== undefined) list[(to + list.length) % list.length]?.focus();
+        else return;
+        e.preventDefault();
+    }
     return (
-        <div class="safety-menu-wrap" ref={wrap}>
-            <button class="safety-add" aria-expanded={open} disabled={!cfg} onClick={() => setOpen(!open)}>
+        <div class="safety-menu-wrap" ref={wrap} onKeyDown={keys}>
+            <button ref={button} class="safety-add" aria-haspopup="menu" aria-expanded={open} disabled={disabled}
+                    onClick={() => { setOpen(!open); button.current?.focus(); }}>
                 + Add profile
                 <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
             </button>
             {open && (
-                <div class="safety-menu">
+                <div class="safety-menu" role="menu" aria-label="Profile templates">
                     {templatesFor(cfg).map((t) => (
                         <Fragment key={t.key}>
-                            {t.key === "custom" && <div class="safety-menu-sep" />}
-                            <button onClick={() => { setOpen(false); onPick(t); }}>
+                            {t.key === "custom" && <div class="safety-menu-sep" role="separator" />}
+                            <button role="menuitem" tabindex={-1} onClick={() => { setOpen(false); onPick(t); }}>
                                 <ClassIcon cls={t.profile.class} />{t.label}<span class="muted">{classLabel(t.profile.class)}</span>
                             </button>
                         </Fragment>
@@ -148,13 +163,16 @@ function AddMenu({ cfg, onPick }) {
 }
 
 // A profile: its state, the countdown, what set it off, and Arm / Silence / Disarm.
-function ProfileCard({ p, s, at, warn, editing, onEdit, reload }) {
+function ProfileCard({ p, s, at, warn, editing, locked, onEdit, reload }) {
     const [now, setNow] = useState(Date.now());
     const [busy, setBusy] = useState(false);
     const [open, setOpen] = useState(null);   // the hub did not arm: these doors or windows are open
     const [err, setErr] = useState("");
     const state = s?.state;   // none until the profile's status is there
     const counting = s?.left != null;
+    // A refusal or an error is about the state it came in: a new state (from here or elsewhere) clears both, before
+    // the new state is painted.
+    useLayoutEffect(() => { setOpen(null); setErr(""); }, [state]);
     useEffect(() => {
         if (!counting) return;
         setNow(Date.now());
@@ -195,7 +213,7 @@ function ProfileCard({ p, s, at, warn, editing, onEdit, reload }) {
                 {(state === "pending" || state === "triggered") && <button disabled={busy} onClick={() => send("alarm.silence")}>Silence</button>}
                 {state && state !== "disarmed" && <button disabled={busy} onClick={() => send("alarm.disarm")}>Disarm</button>}
                 <span class="toolbar-spacer" />
-                <button onClick={onEdit}>Edit</button>
+                <button disabled={locked} onClick={onEdit}>Edit</button>
             </div>
             {open && (
                 <div class="alarm-refusal" role="alert">
@@ -254,11 +272,15 @@ const Check = ({ label, checked, onChange }) => (
 );
 
 // One profile as edited. The id and the class can be set until the first save; after it they are shown.
-function ProfileEditor({ box, edit, setEdit, profiles, st, saved }) {
+function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
     const { p, isNew } = edit;
     const [err, setErr] = useState("");
     const [busy, setBusy] = useState(false);
-    useEffect(() => { box.current?.scrollIntoView({ block: "start" }); }, []);
+    const [idTyped, setIdTyped] = useState(false);   // an id typed by hand stays; until then the name proposes one
+    const box = useRef(null);
+    const first = useRef(null);
+    // In view, with focus on its first field, in the frame it appears: the Edit or Add that opened it is off now.
+    useLayoutEffect(() => { box.current?.scrollIntoView({ block: "start" }); first.current?.focus({ preventScroll: true }); }, []);
 
     const put = (patch) => setEdit({ ...edit, p: { ...p, ...patch } });
     const list = (k) => p[k] || [];
@@ -295,11 +317,11 @@ function ProfileEditor({ box, edit, setEdit, profiles, st, saved }) {
         <div class="card alarm-card alarm-wide safety-editor" ref={box}>
             <h3>{isNew ? "New profile" : "Edit profile"}: {p.name}</h3>
             <div class="safety-fields">
-                <label>Name<input type="text" value={p.name}
-                                  onInput={(e) => { const name = e.currentTarget.value; put(isNew ? { name, id: proposeId(name, profiles) } : { name }); }} /></label>
+                <label>Name<input ref={first} type="text" value={p.name}
+                                  onInput={(e) => { const name = e.currentTarget.value; put(isNew && !idTyped ? { name, id: proposeId(name, profiles) } : { name }); }} /></label>
                 {isNew
                     ? <label>Id<input type="text" class="mono" value={p.id} spellcheck={false} autocomplete="off"
-                                      onInput={(e) => put({ id: e.currentTarget.value })} /></label>
+                                      onInput={(e) => { setIdTyped(true); put({ id: e.currentTarget.value }); }} /></label>
                     : <div class="safety-fixed"><span>Id</span><span class="safety-fixed-val mono">{p.id}</span></div>}
                 {isNew
                     ? <label>Class
@@ -500,15 +522,16 @@ function ProfilePicker({ value, profiles, none, onChange }) {
 function ReactionForm({ alarm, profiles }) {
     const [f, setF] = useState({ profile: "", state: "triggered", ieee: "", key: "", value: "" });
     const set = (patch) => setF({ ...f, ...patch });
+    const profile = profiles.some((p) => p.id === f.profile) ? f.profile : "";   // none again once it is deleted
     const targets = devices.value.filter((d) => !sameIeee(d.ieee, ALARM_IEEE) && settable(exposesOf(d.ieee)).length);
     const keys = settable(exposesOf(f.ieee));
     const expose = keys.find((e) => e.name === f.key);
     const dev = rowOf(f.ieee);
-    const rule = dev && reactionRule({ alarm, profile: f.profile, state: f.state, device: ruleRef(dev), key: f.key, value: f.value.trim() });
+    const rule = dev && reactionRule({ alarm, profile, state: f.state, device: ruleRef(dev), key: f.key, value: f.value.trim() });
     return (
         <>
             <h4>Add a reaction</h4>
-            <label>When the profile<ProfilePicker value={f.profile} profiles={profiles} none="— choose —" onChange={(v) => set({ profile: v })} /></label>
+            <label>When the profile<ProfilePicker value={profile} profiles={profiles} none="— choose —" onChange={(v) => set({ profile: v })} /></label>
             <label>becomes
                 <select value={f.state} onChange={(e) => set({ state: e.currentTarget.value })}>
                     {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -540,12 +563,14 @@ function ReactionForm({ alarm, profiles }) {
 function ButtonForm({ alarm, profiles }) {
     const [f, setF] = useState({ ieee: "", action: "", profile: profiles[0]?.id || "", target: "armed" });
     const set = (patch) => setF({ ...f, ...patch });
-    const all = f.profile === "";
+    // A profile deleted since it was picked: the form's first choice again ("" stays all of them).
+    const profile = f.profile === "" || profiles.some((p) => p.id === f.profile) ? f.profile : profiles[0]?.id || "";
+    const all = profile === "";
     const target = all ? "disarmed" : f.target;
     const buttons = others().filter((d) => exposesOf(d.ieee).some((e) => e.name === "action"));
     const actionExpose = exposesOf(f.ieee).find((e) => e.name === "action");
     const dev = rowOf(f.ieee);
-    const rule = dev && buttonRule({ button: ruleRef(dev), action: f.action.trim(), alarm, profile: f.profile, target });
+    const rule = dev && buttonRule({ button: ruleRef(dev), action: f.action.trim(), alarm, profile, target });
     return (
         <>
             <h4>Arm with a button</h4>
@@ -557,7 +582,7 @@ function ButtonForm({ alarm, profiles }) {
                     <datalist id="alarm-button-actions">{valueChoices(actionExpose).map((v) => <option key={v} value={v} />)}</datalist>
                 </label>
             )}
-            <label>set the profile<ProfilePicker value={f.profile} profiles={profiles} none="all of them" onChange={(v) => set({ profile: v })} /></label>
+            <label>set the profile<ProfilePicker value={profile} profiles={profiles} none="all of them" onChange={(v) => set({ profile: v })} /></label>
             <label>to
                 <select value={target} onChange={(e) => set({ target: e.currentTarget.value })}>
                     {(all ? ["disarmed"] : ["armed", "disarmed"]).map((t) => <option key={t} value={t}>{t}</option>)}

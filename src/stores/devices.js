@@ -73,7 +73,7 @@ export async function getDevice(ieee) {
     return call("device.get", { ieee });
 }
 
-// device.list rows carry no exposes; the pickers (Rules recipes, Security) need them to know which
+// device.list rows carry no exposes; the pickers (Rules recipes, Safety) need them to know which
 // device is a motion sensor and which a light. Fetched once per device and kept, so reopening a
 // picker is instant.
 export const deviceDetails = signal({});   // ieee -> detail (with exposes)

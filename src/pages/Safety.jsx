@@ -81,6 +81,7 @@ export function SafetyPage() {
         setBusy(false);
     }
     const opener = useRef(null);   // the Edit or Add button that opened the editor: focus goes back to it
+    const addButton = useRef(null);
     const open = (p, isNew, from) => { opener.current = from; setEdit({ p, isNew, key: Date.now() }); };
     // After the commit that closes the editor, so the button is enabled again.
     useLayoutEffect(() => { if (!edit && opener.current?.isConnected) opener.current.focus(); }, [!edit]);
@@ -95,7 +96,7 @@ export function SafetyPage() {
                 <h2>Safety</h2>
                 <span class="toolbar-spacer" />
                 <button class="primary" disabled={!st || busy} onClick={disarmAll}>Disarm</button>
-                <AddMenu cfg={cfg} disabled={!cfg || !!edit} onPick={(t, from) => open(newProfile(t, cfg), true, from)} />
+                <AddMenu button={addButton} cfg={cfg} disabled={!cfg || !!edit} onPick={(t, from) => open(newProfile(t, cfg), true, from)} />
             </div>
             <p class="field-hint" style="margin: -4px 0 12px">Disarm switches off the intrusion profiles and silences any
                 other alarm. A flood or fire profile stays armed.</p>
@@ -112,7 +113,8 @@ export function SafetyPage() {
             )}
             {cfg && !ready && <p class="field-hint">Reading what your devices can do…</p>}
             {cfg && ready && edit && (
-                <ProfileEditor key={edit.key} edit={edit} setEdit={setEdit} profiles={profiles} st={st} saved={load} />
+                <ProfileEditor key={edit.key} edit={edit} setEdit={setEdit} profiles={profiles} st={st} saved={load}
+                               deleted={() => { opener.current = addButton.current; }} />
             )}
             {cfg && ready && (
                 <div class="cards">
@@ -129,10 +131,9 @@ export function SafetyPage() {
 // the button. A click elsewhere or Tab closes it and leaves focus where it went; a click on the menu's padding
 // or separator changes nothing; a pick opens the editor, which takes focus (`onPick` gets the button, which the
 // editor gives focus back to).
-function AddMenu({ cfg, disabled, onPick }) {
+function AddMenu({ cfg, disabled, onPick, button }) {
     const [open, setOpen] = useState(false);
     const wrap = useRef(null);
-    const button = useRef(null);
     const items = () => [...(wrap.current?.querySelectorAll("[role=menuitem]") || [])];
     useLayoutEffect(() => {   // in the frame the menu appears: no click can come before its focus and listener
         if (!open) return;
@@ -223,18 +224,18 @@ function ProfileCard({ p, s, at, warn, editing, locked, onEdit, reload }) {
             {warn && <p class="alarm-refusal"><strong>Not guarding.</strong> Arm it to watch its sensors.</p>}
             {err && <p class="error-text" role="alert">{err}</p>}
             <div class="btn-strip">
-                {state === "disarmed" && <button disabled={busy} aria-label={`Arm ${p.name}`} onClick={() => arm(false)}>Arm</button>}
-                {(state === "pending" || state === "triggered") && <button disabled={busy} aria-label={`Silence ${p.name}`} onClick={() => send("alarm.silence")}>Silence</button>}
-                {state && state !== "disarmed" && <button disabled={busy} aria-label={`Disarm ${p.name}`} onClick={() => send("alarm.disarm")}>Disarm</button>}
+                {state === "disarmed" && <button disabled={busy} aria-label={`Arm: ${p.name}`} onClick={() => arm(false)}>Arm</button>}
+                {(state === "pending" || state === "triggered") && <button disabled={busy} aria-label={`Silence: ${p.name}`} onClick={() => send("alarm.silence")}>Silence</button>}
+                {state && state !== "disarmed" && <button disabled={busy} aria-label={`Disarm: ${p.name}`} onClick={() => send("alarm.disarm")}>Disarm</button>}
                 <span class="toolbar-spacer" />
-                <button disabled={locked} aria-label={`Edit ${p.name}`} onClick={(e) => onEdit(e.currentTarget)}>Edit</button>
+                <button disabled={locked} aria-label={`Edit: ${p.name}`} onClick={(e) => onEdit(e.currentTarget)}>Edit</button>
             </div>
             {open && (
                 <div class="alarm-refusal" role="alert">
                     <p><strong>Not armed.</strong> {open.length === 1 ? "This door or window is" : "These doors or windows are"} open:{" "}
                         {open.map((o) => o.name || nameOf(o.ieee)).join(", ")}.</p>
                     <div class="btn-strip">
-                        <button class="danger small" disabled={busy} aria-label={`Arm ${p.name} anyway`} onClick={() => arm(true)}>Arm anyway</button>
+                        <button class="danger small" disabled={busy} aria-label={`Arm anyway: ${p.name}`} onClick={() => arm(true)}>Arm anyway</button>
                         <button class="small" onClick={() => setOpen(null)}>Cancel</button>
                     </div>
                     <p class="field-hint">Arming anyway leaves {open.length === 1 ? "it" : "them"} unguarded until the next disarm.</p>
@@ -286,7 +287,7 @@ const Check = ({ label, checked, onChange }) => (
 );
 
 // One profile as edited. The id and the class can be set until the first save; after it they are shown.
-function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
+function ProfileEditor({ edit, setEdit, profiles, st, saved, deleted }) {
     const { p, isNew } = edit;
     const [err, setErr] = useState("");
     const [busy, setBusy] = useState(false);
@@ -310,11 +311,16 @@ function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
     // The sensors this class is for first; any sensor can go into any profile.
     const sensorChoices = unused("sensors", isSensor).sort((a, b) => suits(p.class, exposesOf(b.ieee)) - suits(p.class, exposesOf(a.ieee)));
 
-    async function write(change, done) {
+    // A refused Save or Delete leaves focus on the body (its button was off while the request was out): back to
+    // that button once it is on again. A Delete takes the Edit button that opened the editor away: the page is told.
+    const back = useRef(null), saveButton = useRef(null), deleteButton = useRef(null);
+    useLayoutEffect(() => { if (!busy && back.current) { back.current.focus(); back.current = null; } }, [busy]);
+    async function write(change, done, from) {
         setBusy(true); setErr("");
         try { await saveConfig(change); }
-        catch (e) { setErr(e.message); setBusy(false); return; }
+        catch (e) { setErr(e.message); back.current = from.current; setBusy(false); return; }
         showToast(done, "ok");
+        if (from === deleteButton) deleted();
         setEdit(null);
         saved();
     }
@@ -323,9 +329,9 @@ function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
         const all = c.profiles || [];
         const kept = !isNew && all.some((x) => x.id === p.id);
         return { ...c, profiles: kept ? all.map((x) => (x.id === p.id ? p : x)) : [...all, p] };
-    }, `Saved: ${p.name}`);
+    }, `Saved: ${p.name}`, saveButton);
     const remove = () => confirm(`Delete the profile ${p.name}?\n\nRules that name ${p.id} stop working.`) &&
-        write((c) => ({ ...c, profiles: (c.profiles || []).filter((x) => x.id !== p.id) }), `Deleted: ${p.name}`);
+        write((c) => ({ ...c, profiles: (c.profiles || []).filter((x) => x.id !== p.id) }), `Deleted: ${p.name}`, deleteButton);
 
     return (
         <div class="card alarm-card alarm-wide safety-editor" ref={box}>
@@ -419,10 +425,10 @@ function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
             {err && <p class="error-text" role="alert">{err}</p>}
             {off && <p class="field-hint">{SAVE_OFF}</p>}
             <div class="btn-strip" style="margin-top: 16px">
-                <button class="primary" disabled={busy || off} onClick={save}>Save</button>
+                <button ref={saveButton} class="primary" disabled={busy || off} onClick={save}>Save</button>
                 <button disabled={busy} onClick={() => setEdit(null)}>Cancel</button>
                 <span class="toolbar-spacer" />
-                {!isNew && <button class="danger" disabled={busy || off} onClick={remove}>Delete profile</button>}
+                {!isNew && <button ref={deleteButton} class="danger" disabled={busy || off} onClick={remove}>Delete profile</button>}
             </div>
         </div>
     );

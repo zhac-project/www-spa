@@ -390,13 +390,15 @@ const COMMANDS = {
     },
     // The whole config, kept as it comes; left-out codes keep the stored ones. Refused while an alarm runs, as the
     // hub refuses it (alarm.cpp alarm_config_set), which also arms a new profile that is not intrusion. Of the
-    // hub's checks on the config only the taken id is here, in its words (alarm_core.cpp alarm_cfg_from_json).
+    // hub's checks on the config only the id's are here: its form and a taken one, in the hub's words
+    // (alarm_core.cpp alarm_cfg_from_json).
     "alarm.config.set": (a) => {
         const c = a.config;
         if (!c || typeof c !== "object") throw new Error("missing config");
         if (ALARM_CFG.profiles.some((p) => ["arming", ...SOUNDING].includes(pstate(p.id).state)))
             throw new Error("an alarm is running: disarm or wait, then save");
         (c.profiles || []).forEach((p, i, all) => {
+            if (typeof p.id !== "string" || !/^[a-z][a-z0-9_]{0,12}$/.test(p.id)) throw new Error(`profiles[${i}]: id must be 1-13 of a-z, 0-9 and _, starting with a letter`);
             if (all.findIndex((x) => x.id === p.id) < i) throw new Error(`profiles[${i}]: id ${p.id} is taken`);
         });
         const was = ALARM_CFG.profiles.map((p) => p.id);

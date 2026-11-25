@@ -27,7 +27,10 @@ export function SoundCard() {
     async function save(patch, okMsg) {
         let d;
         const r = await withToast(async () => { d = await saveSound(patch); }, okMsg, "Failed");
-        if (r === SUCCESS) adopt(d); else if (s) setVol(s.volume);   // refused: the slider goes back
+        if (r === SUCCESS) { adopt(d); return; }
+        // Refused: the hub's state again, for the slider and the switch (the checkbox flipped on the click, and
+        // setting the same state back would not render). If the hub cannot be read, the last state it gave, as a new object.
+        loadSound().then(adopt).catch(() => adopt({ ...s }));
     }
     const play = (name) => withToast(() => playSound(name), null, "Failed");
     const stop = () => withToast(stopSound, null, "Failed");

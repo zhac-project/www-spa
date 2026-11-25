@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// node --test -- the Safety page in a real browser: headless Chrome over the DevTools protocol, the page from a Vite
+// node --test -- the Safety page and Settings › Sound in a real browser: headless Chrome over the DevTools protocol, the page from a Vite
 // dev server, the hub from tools/demo-server.mjs. Keys and mouse clicks are real input events, because focus is what
 // these tests are about. Skipped when there is no Chrome (CHROME_BIN names one).
 import { test, before, after } from "node:test";
@@ -344,4 +344,23 @@ test("a get reply that crosses a push does not roll the profile's state back", {
     await ev(`window.__hook.releaseGet()`);
     await sleep(300);
     assert.equal(await ev(badge("Fire")), "Disarmed");
+});
+
+// ── Settings › Sound: a refused save shows the hub's state again ───────────
+const SOUND_CARD = `[...document.querySelectorAll(".card")].find((c) => c.querySelector("h3")?.textContent === "Sound")`;
+const mute = `${SOUND_CARD}.querySelector(".toggle input")`;
+test("a refused Mute save puts the switch back to what the hub holds", { skip, timeout: 40000 }, async () => {
+    await send("Page.navigate", { url: `${base}/?load=${++loads}#/settings` }, session);
+    await until(`${SOUND_CARD}?.querySelector("#sound-volume")`, "the Sound card");
+    assert.equal(await ev(`${mute}.checked`), false, "the hub starts unmuted");
+    await ev(`(() => {   // the hub refuses every PUT to /api/sound, in its words
+        const real = window.fetch;
+        window.fetch = (url, init) => url === "/api/sound" && init?.method === "PUT"
+            ? Promise.resolve(new Response(JSON.stringify({ error: "muted must be true or false" }), { status: 400 })) : real(url, init);
+    })()`);
+    await clickEl(`${SOUND_CARD}.querySelector(".toggle-slider")`);
+    await until(`${Q(".toast-err")}`, "the refusal's toast");
+    assert.equal(await text(".toast-err"), "Failed: muted must be true or false");
+    await sleep(300);   // the card reloads the hub's state
+    assert.equal(await ev(`${mute}.checked`), false, "the switch shows what the hub holds, not the click");
 });

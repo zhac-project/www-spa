@@ -47,7 +47,11 @@ log <message>                          // serial log (INFO)
 script.run "<name>"                    // run /scripts/<name>.lua
 gpio.set <pin> on|off                  // drive a pin set up as out (Settings › I/O)
 gpio.toggle <pin>                      // flip an out pin
-pwm.set <pin> <0-100>                  // duty in percent for a pwm pin`}</pre>
+pwm.set <pin> <0-100>                  // duty in percent for a pwm pin
+strip.set <pin> #RRGGBB [0-100]        // fill a strip pin with one colour; brightness, default 100
+strip.off <pin>                        // every LED of a strip pin off
+sound.play <name> [0-100] [loop]       // a built-in sound (Settings › Sound); capped at 70
+sound.stop [<name>]                    // stop; with a name, only that sound`}</pre>
             <p class="field-hint"><code>&lt;pin&gt;</code> is the name from Settings › I/O or the GPIO number.
             Inputs and ADC pins are triggers on the Hub I/O device:
             <code>ON Hub I/O#button=1 DO gpio.toggle relay ENDON</code></p>

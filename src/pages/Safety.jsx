@@ -12,14 +12,14 @@ import { createRule } from "../stores/rules.js";
 import { showToast, withToast } from "../stores/ui.js";
 import { isLocal } from "../utils.js";
 import { Card } from "../components/Card.jsx";
-import { ALARM_IEEE, STATES, CLASSES, ROLES, WD_MODES, WD_LEVELS, stateLabel, stateKind, countdownLabel, leftNow,
+import { ALARM_IEEE, alarmCandidate, STATES, CLASSES, ROLES, WD_MODES, WD_LEVELS, stateLabel, stateKind, countdownLabel, leftNow,
          fmtLeft, classLabel, isSensor, suits, outputKind, newOutput, withValue, proposeId, templatesFor, newProfile,
          running, notGuarding, configToSend, settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer, afterGet } from "../alarm.js";
 
 const rowOf = (ieee) => devices.value.find((d) => sameIeee(d.ieee, ieee));
 const nameOf = (ieee) => { const d = rowOf(ieee); return (d && (d.name || d.friendly)) || ieee; };
 const exposesOf = (ieee) => { const d = rowOf(ieee); return (d && deviceDetails.value[d.ieee]?.exposes) || []; };
-const others = () => devices.value.filter((d) => !isLocal(d));   // not the hub's own Alarm and Hub I/O
+const others = () => devices.value.filter(alarmCandidate);   // not the hub's own Alarm and Hub I/O; its Hub Sound can be an output
 const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const SAVE_OFF = "Save is off while an alarm is running: disarm it or wait until it ends.";
 
@@ -467,7 +467,7 @@ function KeypadsCard({ cfg, st, saved }) {
                 </div>
             ))}
             {list.length === 0 && <p class="empty-text">No keypads yet.</p>}
-            <AddPicker label="Add a keypad" list={others().filter((d) => !list.some((x) => sameIeee(x.ieee, d.ieee)))}
+            <AddPicker label="Add a keypad" list={others().filter((d) => !isLocal(d) && !list.some((x) => sameIeee(x.ieee, d.ieee)))}
                        onPick={(d) => setPads([...list, { ieee: d.ieee, trusted: false }])} />
             <p class="field-hint">A keypad's arm buttons arm the intrusion profile set for that button (away, home,
                 night); no code is asked. To disarm, a keypad needs one of the codes below, unless it is trusted (a key

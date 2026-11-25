@@ -3,7 +3,7 @@
 // node --test -- the Safety page's pure helpers (src/alarm.js).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ALARM_IEEE, stateLabel, stateKind, countdownLabel, classLabel, leftNow, fmtLeft, isSensor, suits, outputKind,
+import { ALARM_IEEE, HUB_SOUND_IEEE, alarmCandidate, stateLabel, stateKind, countdownLabel, classLabel, leftNow, fmtLeft, isSensor, suits, outputKind,
          newOutput, withValue, proposeId, TEMPLATES, templatesFor, newProfile, running, notGuarding, configToSend,
          settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer, afterGet, STATES } from "../src/alarm.js";
 
@@ -288,4 +288,12 @@ test("a generated rule name fits the hub's 23 bytes without being cut and differ
     // An id the hub would never send, too long for any name: no rule rather than one the hub cuts.
     assert.equal(reactionRule({ alarm: "Alarm", profile: "x".repeat(20), state: "triggered", device: "x", key: "state", value: "1" }), null);
     assert.equal(buttonRule({ button: "b", action: "x", alarm: "Alarm", profile: "x".repeat(20), target: "armed" }), null);
+});
+
+test("the Safety page offers the hub's own Hub Sound as an output, but not its Alarm or I/O", () => {
+    assert.equal(HUB_SOUND_IEEE, "0x025A484143534E00");
+    assert.equal(alarmCandidate({ ieee: "0x025A484143534E00", local: true }), true);
+    assert.equal(alarmCandidate({ ieee: "0x025a484143534e00", local: true }), true, "the hub may spell the address in lower case");
+    assert.equal(alarmCandidate({ ieee: "0x025A484143414C00", local: true }), false);
+    assert.equal(alarmCandidate({ ieee: "0x00124B0012345678", local: false }), true);
 });

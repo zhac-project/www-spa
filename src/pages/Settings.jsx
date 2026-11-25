@@ -11,6 +11,8 @@ import { uplinkGet, uplinkSet, rainmakerStatus, rainmakerAssoc } from "../stores
 import { rmCloudLogin, rmCloudUser, rmCloudMap, rmCloudUnmap } from "../stores/rainmaker-cloud.js";
 import { Card } from "../components/Card.jsx";
 import { IoCard } from "./IoCard.jsx";
+import { SoundCard } from "./SoundCard.jsx";
+import { ToggleRow } from "../components/ToggleRow.jsx";
 import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
@@ -409,6 +411,8 @@ export function SettingsPage() {
                 {d.auth_enabled && <ChangePasswordCard />}
 
                 <IoCard />
+
+                <SoundCard />
 
                 <BackupCard status={d} />
 
@@ -1374,19 +1378,6 @@ function RestartHubButton() {
         <button type="button" class="secondary small" disabled={state !== "idle"} onClick={doRestart}>
             {state === "restarting" ? "Restarting…" : state === "back" ? "Hub is back" : "Restart hub"}
         </button>
-    );
-}
-
-function ToggleRow({ label, checked, onChange, disabled = false, style = "" }) {
-    return (
-        <div style={`display:flex;align-items:center;gap:10px;margin-bottom:8px${disabled ? ";opacity:.55" : ""}${style}`}>
-            <label class="toggle">
-                <input type="checkbox" checked={checked} disabled={disabled}
-                       onChange={(e) => onChange(e.currentTarget.checked)} />
-                <span class="toggle-slider" />
-            </label>
-            <span style="font-size:var(--text-sm)">{label}</span>
-        </div>
     );
 }
 

@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-let demo, ws, seq = 0;
+let demo, ws, seq = 0, base;
 const waits = new Map();
 const call = (cmd, args = {}) => new Promise((resolve) => {
     const id = ++seq;
@@ -21,6 +21,7 @@ before(async () => {
         const s = net.createServer();
         s.listen(0, "127.0.0.1", () => { const { port } = s.address(); s.close(() => res(port)); });
     });
+    base = `http://127.0.0.1:${port}`;
     demo = spawn(process.execPath, ["tools/demo-server.mjs"], { cwd: ROOT, env: { ...process.env, PORT: String(port) } });
     await new Promise((resolve, reject) => {
         demo.stdout.on("data", (d) => { if (/demo hub/.test(d)) resolve(); });
@@ -54,4 +55,22 @@ test("alarm.config.set refuses a profile id the firmware would refuse, in its wo
     assert.equal((await call("alarm.get")).data.config.profiles[1].id, "home", "a refused config changes nothing");
     assert.equal((await call("alarm.config.set", withId("a_1"))).ok, true, "a good id is taken");
     assert.equal((await call("alarm.get")).data.config.profiles[1].id, "a_1");
+});
+
+test("/api/sound lists the 16 built-ins and takes a volume and mute as the hub does", async () => {
+    const rest = async (method, path, body) => {
+        const r = await fetch(base + path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+        return { status: r.status, body: await r.json() };
+    };
+    const g = (await rest("GET", "/api/sound")).body;
+    assert.deepEqual([g.present, g.volume, g.max_volume, g.muted, g.playing], [true, 40, 70, false, null]);
+    assert.equal(g.sounds.length, 16);
+    assert.deepEqual(g.sounds.find((x) => x.name === "siren"), { name: "siren", ms: 3000, loop: true, urgent: true });
+    assert.deepEqual(g.sounds.filter((x) => x.urgent).map((x) => x.name), ["alarm", "siren", "fire", "co"]);
+    assert.deepEqual((await rest("PUT", "/api/sound", { volume: 100, muted: true })).body.volume, 70, "held to the cap");
+    assert.equal((await rest("GET", "/api/sound")).body.muted, true);
+    const bad = await rest("PUT", "/api/sound", { volume: 101 });
+    assert.deepEqual([bad.status, bad.body.error], [400, "volume must be 0-100"]);
+    assert.equal((await rest("POST", "/api/sound/play", { name: "beep" })).body.ok, true);
+    assert.equal((await rest("POST", "/api/sound/stop")).body.ok, true);
 });

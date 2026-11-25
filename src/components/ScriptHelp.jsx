@@ -51,6 +51,17 @@ zhac.adc_read(pin)              → value, raw | nil, err -- adc pin; mV or raw
 zhac.ws_write(pin, colors)      → true | nil, err    -- strip pin; {0xRRGGBB, ...}`}</pre>
             <p class="field-hint"><code>pin</code> is the configured name or GPIO number.</p>
 
+            <h4>Sound (<code>zhac.*</code>, Settings › Sound)</h4>
+            <pre class="dsl-snippet">{`zhac.sound_play(name [, volume [, loop]]) → true | nil, err  -- a built-in sound; volume 0-100, max 70
+zhac.sound_tone(hz, ms [, volume])        → true | nil, err  -- one tone; hz 100-8000, ms 1-10000
+zhac.sound_melody(notes [, volume])       → true | nil, err  -- up to 32 notes {{hz, ms}, ...}; hz 0 = rest
+zhac.sound_stop([name])                   → true             -- stop; with a name, only that sound
+zhac.sound_volume([v])                    → volume | nil, err -- the default volume; v 0-100 sets it
+zhac.sound_playing()                      → name | nil       -- "tone" and "melody" for those`}</pre>
+            <p class="field-hint">The 16 built-in sounds are listed in Settings › Sound. A normal sound never replaces an
+            urgent one (<code>alarm</code>, <code>siren</code>, <code>fire</code>, <code>co</code>), and mute silences
+            all but those.</p>
+
             <h4>Examples</h4>
             <p><b>Toggle a light from a button rule</b></p>
             <pre class="dsl-snippet">{`-- scripts/toggle_kitchen_light.lua

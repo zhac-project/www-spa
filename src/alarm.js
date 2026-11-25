@@ -4,8 +4,13 @@
 // outputs and the checks on the config. This is presentation only: the words for a state, the countdown of
 // the hub's `left`, which devices a picker offers and what a new row or profile starts as, and the text of
 // the rules the shortcuts create (the hub's rule parser stays the judge of that text).
+import { isLocal } from "./utils.js";
 
 export const ALARM_IEEE = "0x025A484143414C00";   // the hub's own Alarm device (model ZHAC-ALARM)
+export const HUB_SOUND_IEEE = "0x025A484143534E00";   // the hub's own Hub Sound device (its speaker's siren)
+// What a picker offers as a sensor or an output: every real device, and of the hub's own only Hub Sound. The Alarm
+// and Hub I/O are no output of a profile. Case-insensitive, as sameIeee is; that lives in a module this one cannot import.
+export const alarmCandidate = (d) => !isLocal(d) || String(d.ieee).toLowerCase() === HUB_SOUND_IEEE.toLowerCase();
 export const STATES = ["disarmed", "arming", "armed", "pending", "triggered"];
 export const CLASSES = ["intrusion", "fire", "water", "gas", "other"];
 export const ROLES = ["", "away", "home", "night"];

@@ -518,6 +518,15 @@ function onUpgrade(req, sock) {
     sock.on("close", () => { clearInterval(tick); CLIENTS.delete(push); });
 }
 
+// ── Hub sounds: the 16 built-ins of the firmware's sound_synth.cpp (name, one pass in ms, can loop, urgent) ──
+const SOUND_TABLE = [["beep", 120, 1, 0], ["double_beep", 300, 1, 0], ["triple_beep", 400, 1, 0], ["chime", 1000, 0, 0],
+    ["doorbell", 1500, 0, 0], ["westminster", 4250, 0, 0], ["notify", 280, 0, 0], ["success", 400, 0, 0], ["error", 500, 0, 0],
+    ["warning", 1050, 1, 0], ["armed", 280, 0, 0], ["disarmed", 200, 0, 0], ["alarm", 500, 1, 1], ["siren", 3000, 1, 1],
+    ["fire", 2500, 1, 1], ["co", 700, 1, 1]];
+const SOUND = { volume: 40, max_volume: 70, muted: false };
+const soundState = () => ({ present: true, ...SOUND, playing: null,
+    sounds: SOUND_TABLE.map(([name, ms, loop, urgent]) => ({ name, ms, loop: !!loop, urgent: !!urgent })) });
+
 // ── HTTP: the REST calls the UI makes, then static dist/ ───────────────────
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json" };
 const server = createServer(async (req, res) => {
@@ -538,6 +547,22 @@ const server = createServer(async (req, res) => {
         let body = ""; for await (const c of req) body += c;
         SCRIPTS[decodeURIComponent(url.pathname.slice(13))] = body;
         return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/sound" || url.pathname.startsWith("/api/sound/")) {   // Settings › Sound, as the hub's api_sound.cpp answers
+        const sub = url.pathname.slice(10);
+        let body = ""; for await (const c of req) body += c;
+        if (sub === "" && req.method === "GET") return json(200, soundState());
+        if (sub === "" && req.method === "PUT") {
+            let b; try { b = JSON.parse(body); } catch { b = null; }
+            if (!b || typeof b !== "object" || Array.isArray(b)) return json(400, { error: "body must be a JSON object under 256 bytes" });
+            if ("volume" in b && !(Number.isInteger(b.volume) && b.volume >= 0 && b.volume <= 100)) return json(400, { error: "volume must be 0-100" });
+            if ("muted" in b && typeof b.muted !== "boolean") return json(400, { error: "muted must be true or false" });
+            if ("volume" in b) SOUND.volume = Math.min(b.volume, SOUND.max_volume);
+            if ("muted" in b) SOUND.muted = b.muted;
+            return json(200, soundState());
+        }
+        if (sub === "/play" && req.method === "POST") return json(200, { ok: true });
+        if (sub === "/stop" && req.method === "POST") return json(200, { ok: true });
     }
     if (url.pathname.startsWith("/api/")) return json(501, { error: "not simulated by the demo hub" });
     const rel = normalize(url.pathname === "/" ? "index.html" : url.pathname.slice(1));

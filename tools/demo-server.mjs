@@ -32,6 +32,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RESERVED } from "../src/alarm.js";   // the ids the hub refuses (alarm_core.cpp kReserved)
 
 const PORT = Number(process.env.PORT || 8080);
 const DUAL = process.env.DEMO_KIND === "dual";
@@ -390,8 +391,8 @@ const COMMANDS = {
     },
     // The whole config, kept as it comes; left-out codes keep the stored ones. Refused while an alarm runs, as the
     // hub refuses it (alarm.cpp alarm_config_set), which also arms a new profile that is not intrusion. Of the
-    // hub's checks on the config only the id's are here: its form and a taken one, in the hub's words
-    // (alarm_core.cpp alarm_cfg_from_json).
+    // hub's checks on the config only the id's are here: its form, a reserved one and a taken one, in the hub's
+    // words (alarm_core.cpp alarm_cfg_from_json).
     "alarm.config.set": (a) => {
         const c = a.config;
         if (!c || typeof c !== "object") throw new Error("missing config");
@@ -399,6 +400,7 @@ const COMMANDS = {
             throw new Error("an alarm is running: disarm or wait, then save");
         (c.profiles || []).forEach((p, i, all) => {
             if (typeof p.id !== "string" || !/^[a-z][a-z0-9_]{0,12}$/.test(p.id)) throw new Error(`profiles[${i}]: id must be 1-13 of a-z, 0-9 and _, starting with a letter`);
+            if (RESERVED.includes(p.id)) throw new Error(`profiles[${i}]: id ${p.id} is reserved`);
             if (all.findIndex((x) => x.id === p.id) < i) throw new Error(`profiles[${i}]: id ${p.id} is taken`);
         });
         const was = ALARM_CFG.profiles.map((p) => p.id);

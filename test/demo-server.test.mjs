@@ -45,6 +45,12 @@ test("alarm.config.set refuses a profile id the firmware would refuse, in its wo
         assert.equal(r.ok, false, `id ${JSON.stringify(id)}`);
         assert.equal(r.err, "profiles[1]: id must be 1-13 of a-z, 0-9 and _, starting with a letter");
     }
+    // alarm_core.cpp kReserved: the stage 1 attributes and states, and attribute names the device layer treats as its own
+    for (const id of ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered", "pin_code", "action_code", "color_hex"]) {
+        const r = await call("alarm.config.set", withId(id));
+        assert.equal(r.ok, false, `id ${id}`);
+        assert.equal(r.err, `profiles[1]: id ${id} is reserved`);
+    }
     assert.equal((await call("alarm.get")).data.config.profiles[1].id, "home", "a refused config changes nothing");
     assert.equal((await call("alarm.config.set", withId("a_1"))).ok, true, "a good id is taken");
     assert.equal((await call("alarm.get")).data.config.profiles[1].id, "a_1");

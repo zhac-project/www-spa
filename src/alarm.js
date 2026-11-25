@@ -56,7 +56,7 @@ export const newOutput = (ieee, kind, cls) =>
 
 // An id for a new profile, as the hub takes one: 1-13 of a-z, 0-9, _, starting with a letter, not reserved
 // (alarm_core.cpp kReserved: the stage 1 attributes and states, and attribute names the device layer treats as its own).
-const RESERVED = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered", "pin_code", "action_code", "color_hex"];
+export const RESERVED = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered", "pin_code", "action_code", "color_hex"];
 const ID_MAX = 13;
 export function proposeId(name, profiles) {
     const taken = profiles ?? [];

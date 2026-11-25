@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ALARM_IEEE, stateLabel, stateKind, countdownLabel, classLabel, leftNow, fmtLeft, isSensor, suits, outputKind,
          newOutput, withValue, proposeId, TEMPLATES, templatesFor, newProfile, running, notGuarding, configToSend,
-         settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer } from "../src/alarm.js";
+         settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer, afterGet, STATES } from "../src/alarm.js";
 
 const bin = (name, access = 3) => ({ name, type: "binary", access });
 
@@ -92,6 +92,44 @@ test("an id is proposed from the name", () => {
     assert.equal(proposeId("Armed", [{ id: "armed2" }]), "armed3", "a reserved word, then a taken one");
 });
 
+test("an id never ends in _ after the 13-character cut", () => {
+    assert.equal(proposeId("abcdefghijkl mno", []), "abcdefghijkl", "cut at 13 inside a separator: the _ goes");
+    assert.equal(proposeId("abcdefghijkl mno", [{ id: "abcdefghijkl" }]), "abcdefghijkl2");
+    for (const name of ["Alarm  state", "x", "ab cdefghijk lm", "a_b_c_d_e_f_g_h"]) assert.doesNotMatch(proposeId(name, []), /_$/, name);
+});
+
+test("an id is never one the hub keeps for itself", () => {
+    // What the hub refuses as an id (alarm_core.cpp kReserved), each asked for by its own name.
+    const reserved = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered", "pin_code", "action_code", "color_hex"];
+    for (const id of reserved) {
+        const got = proposeId(id.replace(/_/g, " "), []);
+        assert.ok(!reserved.includes(got), `${id} -> ${got}`);
+        assert.equal(got, `${id}2`);
+    }
+});
+
+test("an id is proposed without a name or a profile list", () => {
+    assert.equal(proposeId(null, []), "profile");
+    assert.equal(proposeId(undefined, []), "profile");
+    assert.equal(proposeId("Flood", null), "flood", "a config without a profile list");
+    assert.equal(newProfile(TEMPLATES.find((t) => t.key === "flood"), { profiles: null }).id, "flood");
+    assert.equal(newProfile(TEMPLATES.find((t) => t.key === "flood"), {}).id, "flood");
+});
+
+test("a copy of a template gets a name no profile has", () => {
+    const t = (key) => TEMPLATES.find((x) => x.key === key);
+    const had = (...names) => ({ profiles: names.map((name, i) => ({ id: `p${i}`, name })) });
+    assert.equal(newProfile(t("flood"), had()).name, "Flood");
+    assert.equal(newProfile(t("flood"), had("Flood")).name, "Flood 2");
+    assert.equal(newProfile(t("flood"), had("Flood", "Flood 2")).name, "Flood 3");
+    assert.equal(newProfile(t("flood"), had("Flood 2")).name, "Flood", "the first free one");
+    assert.equal(newProfile(t("night"), had("Night")).name, "Night 2");
+    assert.equal(newProfile(t("custom"), had("Custom")).name, "Custom 2");
+    assert.equal(newProfile(t("flood"), { profiles: null }).name, "Flood");
+    assert.equal(newProfile(t("fire"), had("Fire and smoke")).name, "Fire and smoke 2");
+    assert.equal(TEMPLATES.find((x) => x.key === "flood").profile.name, "Flood", "the template itself stays as it was");
+});
+
 test("templates: the three modes are offered only while their role is free", () => {
     const keys = (cfg) => templatesFor(cfg).map((t) => t.key);
     assert.deepEqual(keys({ profiles: [] }), ["away", "home", "night", "vacation", "flood", "fire", "gas", "custom"]);
@@ -125,11 +163,14 @@ test("Save is off while an alarm runs; a disarmed hazard profile is flagged", ()
 });
 
 test("codes are write-only: sent only to replace them, and an empty list clears them", () => {
-    const cfg = { exit_delay: 30, entry_delay: 30, siren_time: 180, notify_arm: false, sensors: [], sirens: [], keypads: [], codes_count: 2 };
+    const cfg = { profiles: [{ id: "away", name: "Away", class: "intrusion", role: "away", arm_delay: 30, trigger_delay: 30, siren_time: 180,
+                               notify_arm: false, sensors: [{ ieee: "0x1", entry: true }], outputs: [{ ieee: "0x2", kind: "alarm" }] }],
+                  keypads: [{ ieee: "0x3", trusted: false }], codes_count: 2 };
     const kept = configToSend(cfg, null);
     assert.equal("codes" in kept, false, "no `codes`: the hub keeps the stored ones");
     assert.equal("codes_count" in kept, false);
-    assert.equal(kept.siren_time, 180);
+    assert.deepEqual(kept.profiles, cfg.profiles, "the profiles go back as they are");
+    assert.deepEqual(kept.keypads, cfg.keypads);
     assert.deepEqual(configToSend(cfg, [" 1234 ", "", "87654321"]).codes, ["1234", "87654321"]);
     assert.deepEqual(configToSend(cfg, []).codes, []);
     assert.deepEqual(configToSend(cfg, [""]).codes, [], "only empty fields: clear");
@@ -185,4 +226,63 @@ test("shortcuts write rules on a profile", () => {
     assert.equal(buttonRule({ ...b, action: "" }), null);
     assert.equal(buttonRule({ ...b, action: 'a"b' }), null);
     assert.equal(buttonRule({ ...b, profile: "ni ght" }), null);
+});
+
+test("a rule names a device by its name only when no other device has that name", () => {
+    const a = { ieee: "0x00158D0007A1B2C3", name: "lamp" }, b = { ieee: "0x00158D0007A1B2C4", name: "lamp" };
+    const c = { ieee: "0x00158D0007A1B2C5", name: "door" }, d = { ieee: "0x00158D0007A1B2C6", friendly: "door" };
+    const all = [a, b, c, { ieee: ALARM_IEEE, name: "Alarm" }];
+    assert.equal(ruleRef(a, all), a.ieee, "two devices called lamp: the address, the name would name the first one");
+    assert.equal(ruleRef(b, all), b.ieee);
+    assert.equal(ruleRef(c, all), "door", "one device of that name: the name");
+    assert.equal(ruleRef(c, [c, d]), c.ieee, "`name` and `friendly` are the same field: d is called door too");
+    assert.equal(ruleRef(d, [c, d]), d.ieee);
+    assert.equal(ruleRef(c, [c, { ...c, ieee: c.ieee.toLowerCase() }]), "door", "the same device twice in the list is one device");
+    assert.equal(ruleRef(a, [{ ...a, name: "Lamp" }]), "lamp", "names are exact, as the hub compares them");
+    assert.equal(ruleRef(a), "lamp", "no list: the name alone");
+    assert.equal(ruleRef(a, null), "lamp");
+    assert.equal(ruleRef({ ieee: ALARM_IEEE }, all), ALARM_IEEE, "the Alarm device not listed: its address");
+});
+
+test("a get reply that crosses a push keeps the pushed status and takes the config", () => {
+    const status = (state, push) => ({ state, profiles: [{ id: "away", state }], at: 1000, push });
+    const reply = (state) => ({ state, profiles: [{ id: "away", state }], config: { profiles: [{ id: "away" }] } });
+    // The get went out when the page had seen no push (seen 0); a push came while it was out, then the reply.
+    const pushed = status("triggered", 1);
+    assert.equal(afterGet(pushed, reply("armed"), 0, 2000), pushed, "the older status does not roll the push back");
+    // No push in between: the reply is the newest thing the page has seen.
+    assert.deepEqual(afterGet(status("armed", 1), reply("triggered"), 1, 2000),
+        { state: "triggered", profiles: [{ id: "away", state: "triggered" }], at: 2000, push: 1 });
+    assert.deepEqual(afterGet(null, reply("armed"), 0, 2000), { state: "armed", profiles: [{ id: "away", state: "armed" }], at: 2000, push: 0 },
+        "the first load");
+    assert.ok(!("config" in afterGet(null, reply("armed"), 0, 2000)), "the config is kept apart from the status");
+    // A second get after the first: its reply is newer than the first's even though both came after the push.
+    const first = afterGet(status("armed", 1), reply("armed"), 1, 2000);
+    assert.equal(afterGet(first, reply("triggered"), 1, 3000).state, "triggered");
+    assert.equal(afterGet(status("triggered", 2), reply("armed"), 1, 3000).state, "triggered", "two pushes while the get was out");
+});
+
+test("a generated rule name fits the hub's 23 bytes without being cut and differs wherever its inputs differ", () => {
+    const id13 = "abcdefghijklm", twin = "abcdefghijkln";   // an id has at most 13 characters
+    const names = [];
+    for (const profile of ["away", id13, twin, "p_1"]) {
+        for (const state of STATES) names.push([`${profile}/${state}`,
+            reactionRule({ alarm: "Alarm", profile, state, device: "lamp", key: "state", value: "1" }).name]);
+        for (const target of ["armed", "disarmed"]) names.push([`${profile}/${target}`,
+            buttonRule({ button: "b", action: "x", alarm: "Alarm", profile, target }).name]);
+    }
+    names.push(["all", buttonRule({ button: "b", action: "x", alarm: "Alarm", profile: "", target: "disarmed" }).name]);
+    for (const [what, name] of names) assert.ok(Buffer.byteLength(name) <= 23, `${what}: ${name} is ${Buffer.byteLength(name)} bytes`);
+    const reaction = names.filter(([w]) => STATES.some((s) => w.endsWith(`/${s}`))).map(([, n]) => n);
+    const button = names.filter(([w]) => /\/(armed|disarmed)$/.test(w) || w === "all").map(([, n]) => n);
+    // `armed`/`disarmed` are both a state and a button target: tell the two kinds apart by what made them.
+    for (const kind of [reaction, button]) assert.equal(new Set(kind).size, kind.length, "no two names alike");
+    // Short ids keep the whole name: the Rules list reads better with the kind of rule in front.
+    assert.equal(reactionRule({ alarm: "Alarm", profile: "flood", state: "triggered", device: "x", key: "state", value: "1" }).name, "Alarm flood triggered");
+    assert.equal(buttonRule({ button: "b", action: "x", alarm: "Alarm", profile: "night", target: "disarmed" }).name, "Button disarms night");
+    assert.equal(reactionRule({ alarm: "Alarm", profile: id13, state: "triggered", device: "x", key: "state", value: "1" }).name, `${id13} triggered`);
+    assert.equal(buttonRule({ button: "b", action: "x", alarm: "Alarm", profile: id13, target: "armed" }).name, `arms ${id13}`);
+    // An id the hub would never send, too long for any name: no rule rather than one the hub cuts.
+    assert.equal(reactionRule({ alarm: "Alarm", profile: "x".repeat(20), state: "triggered", device: "x", key: "state", value: "1" }), null);
+    assert.equal(buttonRule({ button: "b", action: "x", alarm: "Alarm", profile: "x".repeat(20), target: "armed" }), null);
 });

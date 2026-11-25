@@ -54,14 +54,16 @@ export const newOutput = (ieee, kind, cls) =>
     kind === "warning" ? { ieee, kind, mode: WD_MODE_OF[cls] || "emergency", level: "high", strobe: true }
     : kind === "state" ? withValue({ ieee, kind }, CLOSES.includes(cls) ? "off" : "on") : { ieee, kind };
 
-// An id for a new profile, as the hub takes one: 1-13 of a-z, 0-9, _, starting with a letter, not reserved.
-const RESERVED = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered"];
+// An id for a new profile, as the hub takes one: 1-13 of a-z, 0-9, _, starting with a letter, not reserved
+// (alarm_core.cpp kReserved: the stage 1 attributes and states, and attribute names the device layer treats as its own).
+const RESERVED = ["alarm_state", "alarm_sensor", "armed", "disarmed", "arming", "pending", "triggered", "pin_code", "action_code", "color_hex"];
 const ID_MAX = 13;
-export function proposeId(name, profiles = []) {
-    let base = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+export function proposeId(name, profiles) {
+    const taken = profiles ?? [];
+    let base = String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     if (base && !/^[a-z]/.test(base)) base = `p_${base}`;
-    base = base.slice(0, ID_MAX) || "profile";
-    const free = (id) => !RESERVED.includes(id) && !profiles.some((p) => p.id === id);
+    base = base.slice(0, ID_MAX).replace(/_+$/, "") || "profile";   // the cut can leave a separator at the end
+    const free = (id) => !RESERVED.includes(id) && !taken.some((p) => p.id === id);
     let id = base;
     for (let n = 2; !free(id); n++) id = `${base.slice(0, ID_MAX - String(n).length)}${n}`;   // the digits take the last characters
     return id;
@@ -84,7 +86,15 @@ export function templatesFor(cfg) {
     const taken = (cfg.profiles || []).map((p) => p.role).filter(Boolean);
     return TEMPLATES.filter((t) => !taken.includes(t.profile.role));
 }
-export const newProfile = (t, cfg) => ({ ...t.profile, id: proposeId(t.key, cfg.profiles), sensors: [], outputs: [] });
+// A copy of a template is named "Night 2", "Night 3", ...: the first name no profile has.
+function freeName(name, profiles) {
+    const has = (n) => profiles.some((p) => p.name === n);
+    let n = 1, free = name;
+    while (has(free)) free = `${name} ${++n}`;
+    return free;
+}
+export const newProfile = (t, cfg) => ({ ...t.profile, name: freeName(t.profile.name, cfg.profiles ?? []),
+                                         id: proposeId(t.key, cfg.profiles), sensors: [], outputs: [] });
 
 // alarm.changed lists every profile's status in config order: other ids (a profile added, deleted or moved in another
 // tab) mean the loaded config is old and alarm.get is due. A push without profiles says nothing about them.
@@ -92,6 +102,16 @@ export function profilesDiffer(cfg, st) {
     if (!st?.profiles) return false;
     const have = (cfg?.profiles || []).map((p) => p.id), now = st.profiles.map((p) => p.id);
     return have.length !== now.length || have.some((id, i) => id !== now[i]);
+}
+
+// alarm.get's reply against the pushes that came while it was out. `cur` is the status the page holds, `push` the
+// number of pushes it has seen, `seen` that number when the get was sent. A push since then may be newer than the
+// reply (on the hub the two can cross), so it stays; the hub pushes every change, which keeps it right. The reply's
+// config is the page's to take either way. Returns the status to hold.
+export function afterGet(cur, reply, seen, now) {
+    if (cur && cur.push > seen) return cur;
+    const { config: _config, ...s } = reply;
+    return { ...s, at: now, push: cur?.push || 0 };
 }
 
 // Save is off while a profile is arming, pending or triggered; a disarmed hazard profile guards nothing.
@@ -108,11 +128,16 @@ export function configToSend(cfg, codes) {
 }
 
 // A device as a rule names it: by name when the parser reads that name back as the device (one word,
-// as an action needs; not an address; not a system trigger such as Event#), else by its address.
+// as an action needs; not an address; not a system trigger such as Event#) and no other device has the
+// name (the hub takes the first it finds), else by its address, which a trigger and an action both take.
+// `all`: the devices the hub lists.
 const SYSTEM = new Set(["System", "Time", "Event", "Rules", "Mqtt", "Offline"]);
-export function ruleRef(dev) {
-    const name = (dev && (dev.name || dev.friendly)) || "";
-    const plain = /^[^\s#;]+$/.test(name) && !/^0x/i.test(name) && !name.includes("ENDON") && !SYSTEM.has(name);
+const nameOf = (d) => (d && (d.name || d.friendly)) || "";
+const sameDevice = (a, b) => String(a.ieee).toLowerCase() === String(b.ieee).toLowerCase();
+export function ruleRef(dev, all) {
+    const name = nameOf(dev);
+    const plain = /^[^\s#;]+$/.test(name) && !/^0x/i.test(name) && !name.includes("ENDON") && !SYSTEM.has(name)
+        && !(all ?? []).some((d) => !sameDevice(d, dev) && nameOf(d) === name);
     return plain ? name : dev ? dev.ieee : "";
 }
 
@@ -128,9 +153,15 @@ export function valueChoices(e) {
 // One word each: the parser takes a value up to the next space, and `;` starts the next action.
 const word = (v) => typeof v === "string" && /^[^\s;"]+$/.test(v);
 
+// The hub cuts a rule's name at 23 bytes. A name that is longer drops its first word: the id and the state, or the
+// target, are what tell two rules apart. null when even that is too long (an id has 13 characters at most).
+const NAME_MAX = 23;
+const ruleName = (what, tail) => [`${what} ${tail}`, tail].find((n) => new TextEncoder().encode(n).length <= NAME_MAX) ?? null;
+
 export function reactionRule({ alarm, profile, state, device, key, value }) {
     if (![alarm, profile, state, device, key, value].every(word)) return null;
-    return { name: `Alarm ${profile} ${state}`, dsl: `ON ${alarm}#${profile}="${state}" DO zigbee.set ${device} ${key} ${value} ENDON` };
+    const name = ruleName("Alarm", `${profile} ${state}`);
+    return name && { name, dsl: `ON ${alarm}#${profile}="${state}" DO zigbee.set ${device} ${key} ${value} ENDON` };
 }
 
 // A button arms or disarms one profile; with no profile it disarms them all (alarm_state).
@@ -138,6 +169,6 @@ export function buttonRule({ button, action, alarm, profile, target }) {
     const all = profile === "";
     if (![button, action, alarm].every(word) || !(all ? target === "disarmed" : word(profile) && (target === "armed" || target === "disarmed")))
         return null;
-    return { name: `Button ${target === "armed" ? "arms" : "disarms"}${all ? "" : ` ${profile}`}`,
-             dsl: `ON ${button}#action="${action}" DO zigbee.set ${alarm} ${all ? "alarm_state" : profile} ${target} ENDON` };
+    const name = ruleName("Button", `${target === "armed" ? "arms" : "disarms"}${all ? "" : ` ${profile}`}`);
+    return name && { name, dsl: `ON ${button}#action="${action}" DO zigbee.set ${alarm} ${all ? "alarm_state" : profile} ${target} ENDON` };
 }

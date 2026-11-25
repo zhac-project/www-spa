@@ -14,7 +14,7 @@ import { isLocal } from "../utils.js";
 import { Card } from "../components/Card.jsx";
 import { ALARM_IEEE, STATES, CLASSES, ROLES, WD_MODES, WD_LEVELS, stateLabel, stateKind, countdownLabel, leftNow,
          fmtLeft, classLabel, isSensor, suits, outputKind, newOutput, withValue, proposeId, templatesFor, newProfile,
-         running, notGuarding, configToSend, settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer } from "../alarm.js";
+         running, notGuarding, configToSend, settable, ruleRef, valueChoices, reactionRule, buttonRule, profilesDiffer, afterGet } from "../alarm.js";
 
 const rowOf = (ieee) => devices.value.find((d) => sameIeee(d.ieee, ieee));
 const nameOf = (ieee) => { const d = rowOf(ieee); return (d && (d.name || d.friendly)) || ieee; };
@@ -47,18 +47,20 @@ const ClassIcon = ({ cls }) => (
 );
 
 export function SafetyPage() {
-    const [st, setSt] = useState(null);      // alarm.get / alarm.changed without the config; `at`: when it came
+    const [st, setSt] = useState(null);      // alarm.get / alarm.changed without the config; `at`: when it came, `push`: pushes seen
     const [cfg, setCfg] = useState(null);    // the hub's config, as alarm.get last gave it
     const [err, setErr] = useState("");
     const [ready, setReady] = useState(false);   // device exposes read: the pickers need them
     const [edit, setEdit] = useState(null);  // {p, isNew, key}: the profile in the editor, as edited so far
     const [busy, setBusy] = useState(false);
 
+    const pushes = useRef(0);   // alarm.changed pushes seen; a get that crosses one keeps its status (afterGet)
     async function load() {
+        const seen = pushes.current;
         try {
-            const { config, ...s } = await call("alarm.get");
-            setSt({ ...s, at: Date.now() });
-            setCfg(config);
+            const reply = await call("alarm.get");
+            setSt((cur) => afterGet(cur, reply, seen, Date.now()));
+            setCfg(reply.config);
             setErr("");
         } catch (e) { setErr(e.message); }
     }
@@ -67,7 +69,7 @@ export function SafetyPage() {
     useEffect(() => onOpen(load), []);   // and again after each reconnect
     useEffect(() => on("alarm.changed", (s) => {
         if (!s || !s.profiles) return;
-        setSt({ ...s, at: Date.now() });
+        setSt({ ...s, at: Date.now(), push: ++pushes.current });
         // Profiles added, deleted or moved in another tab: the config again. An open editor keeps its draft.
         if (cfgNow.current && profilesDiffer(cfgNow.current, s)) load();
     }), []);
@@ -78,7 +80,10 @@ export function SafetyPage() {
         try { await call("alarm.disarm", {}); load(); } catch (e) { setErr(e.message); }
         setBusy(false);
     }
-    const open = (p, isNew) => setEdit({ p, isNew, key: Date.now() });
+    const opener = useRef(null);   // the Edit or Add button that opened the editor: focus goes back to it
+    const open = (p, isNew, from) => { opener.current = from; setEdit({ p, isNew, key: Date.now() }); };
+    // After the commit that closes the editor, so the button is enabled again.
+    useLayoutEffect(() => { if (!edit && opener.current?.isConnected) opener.current.focus(); }, [!edit]);
 
     if (err === "unknown cmd") {
         return <div class="page"><p class="empty-text">This hub's firmware has no alarm panel. Update it on the OTA page.</p></div>;
@@ -90,7 +95,7 @@ export function SafetyPage() {
                 <h2>Safety</h2>
                 <span class="toolbar-spacer" />
                 <button class="primary" disabled={!st || busy} onClick={disarmAll}>Disarm</button>
-                <AddMenu cfg={cfg} disabled={!cfg || !!edit} onPick={(t) => open(newProfile(t, cfg), true)} />
+                <AddMenu cfg={cfg} disabled={!cfg || !!edit} onPick={(t, from) => open(newProfile(t, cfg), true, from)} />
             </div>
             <p class="field-hint" style="margin: -4px 0 12px">Disarm switches off the intrusion profiles and silences any
                 other alarm. A flood or fire profile stays armed.</p>
@@ -101,7 +106,7 @@ export function SafetyPage() {
                     {profiles.map((p) => (
                         <ProfileCard key={p.id} p={p} s={(st?.profiles || []).find((x) => x.id === p.id)} at={st?.at}
                                      warn={notGuarding(p, st)} editing={edit?.isNew === false && edit.p.id === p.id}
-                                     locked={!!edit} reload={load} onEdit={() => open(p, false)} />
+                                     locked={!!edit} reload={load} onEdit={(from) => open(p, false, from)} />
                     ))}
                 </div>
             )}
@@ -121,8 +126,9 @@ export function SafetyPage() {
 
 // "+ Add profile": the templates as a menu (the menu button pattern). It opens with focus on its first item; the
 // arrow keys, Home and End move between the items; Escape, or the button again, closes it and gives focus back to
-// the button. A click elsewhere or Tab closes it and leaves focus where it went; a pick opens the editor, which
-// takes focus.
+// the button. A click elsewhere or Tab closes it and leaves focus where it went; a click on the menu's padding
+// or separator changes nothing; a pick opens the editor, which takes focus (`onPick` gets the button, which the
+// editor gives focus back to).
 function AddMenu({ cfg, disabled, onPick }) {
     const [open, setOpen] = useState(false);
     const wrap = useRef(null);
@@ -154,11 +160,12 @@ function AddMenu({ cfg, disabled, onPick }) {
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
             </button>
             {open && (
-                <div class="safety-menu" role="menu" aria-label="Profile templates">
+                <div class="safety-menu" role="menu" aria-label="Profile templates"
+                     onMouseDown={(e) => { if (!e.target.closest("[role=menuitem]")) e.preventDefault(); }}>
                     {templatesFor(cfg).map((t) => (
                         <Fragment key={t.key}>
                             {t.key === "custom" && <div class="safety-menu-sep" role="separator" />}
-                            <button role="menuitem" tabindex={-1} onClick={() => { setOpen(false); onPick(t); }}>
+                            <button role="menuitem" tabindex={-1} onClick={() => { setOpen(false); onPick(t, button.current); }}>
                                 <ClassIcon cls={t.profile.class} />{t.label}<span class="muted">{classLabel(t.profile.class)}</span>
                             </button>
                         </Fragment>
@@ -216,18 +223,18 @@ function ProfileCard({ p, s, at, warn, editing, locked, onEdit, reload }) {
             {warn && <p class="alarm-refusal"><strong>Not guarding.</strong> Arm it to watch its sensors.</p>}
             {err && <p class="error-text" role="alert">{err}</p>}
             <div class="btn-strip">
-                {state === "disarmed" && <button disabled={busy} onClick={() => arm(false)}>Arm</button>}
-                {(state === "pending" || state === "triggered") && <button disabled={busy} onClick={() => send("alarm.silence")}>Silence</button>}
-                {state && state !== "disarmed" && <button disabled={busy} onClick={() => send("alarm.disarm")}>Disarm</button>}
+                {state === "disarmed" && <button disabled={busy} aria-label={`Arm ${p.name}`} onClick={() => arm(false)}>Arm</button>}
+                {(state === "pending" || state === "triggered") && <button disabled={busy} aria-label={`Silence ${p.name}`} onClick={() => send("alarm.silence")}>Silence</button>}
+                {state && state !== "disarmed" && <button disabled={busy} aria-label={`Disarm ${p.name}`} onClick={() => send("alarm.disarm")}>Disarm</button>}
                 <span class="toolbar-spacer" />
-                <button disabled={locked} onClick={onEdit}>Edit</button>
+                <button disabled={locked} aria-label={`Edit ${p.name}`} onClick={(e) => onEdit(e.currentTarget)}>Edit</button>
             </div>
             {open && (
                 <div class="alarm-refusal" role="alert">
                     <p><strong>Not armed.</strong> {open.length === 1 ? "This door or window is" : "These doors or windows are"} open:{" "}
                         {open.map((o) => o.name || nameOf(o.ieee)).join(", ")}.</p>
                     <div class="btn-strip">
-                        <button class="danger small" disabled={busy} onClick={() => arm(true)}>Arm anyway</button>
+                        <button class="danger small" disabled={busy} aria-label={`Arm ${p.name} anyway`} onClick={() => arm(true)}>Arm anyway</button>
                         <button class="small" onClick={() => setOpen(null)}>Cancel</button>
                     </div>
                     <p class="field-hint">Arming anyway leaves {open.length === 1 ? "it" : "them"} unguarded until the next disarm.</p>
@@ -289,7 +296,7 @@ function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
     // In view, with focus on its first field, in the frame it appears: the Edit or Add that opened it is off now.
     useLayoutEffect(() => { box.current?.scrollIntoView({ block: "start" }); first.current?.focus({ preventScroll: true }); }, []);
 
-    const put = (patch) => setEdit({ ...edit, p: { ...p, ...patch } });
+    const put = (patch) => { setErr(""); setEdit({ ...edit, p: { ...p, ...patch } }); };   // an edit answers the refusal
     const list = (k) => p[k] || [];
     const setRow = (k, i, row) => put({ [k]: list(k).map((x, j) => (j === i ? row : x)) });
     const editRow = (k, i, patch) => setRow(k, i, { ...list(k)[i], ...patch });
@@ -323,88 +330,91 @@ function ProfileEditor({ edit, setEdit, profiles, st, saved }) {
     return (
         <div class="card alarm-card alarm-wide safety-editor" ref={box}>
             <h3>{isNew ? "New profile" : "Edit profile"}: {p.name}</h3>
-            <div class="safety-fields">
-                <label>Name<input ref={first} type="text" value={p.name}
-                                  onInput={(e) => { const name = e.currentTarget.value; put(isNew && !idTyped ? { name, id: proposeId(name, profiles) } : { name }); }} /></label>
-                {isNew
-                    ? <label>Id<input type="text" class="mono" value={p.id} spellcheck={false} autocomplete="off"
-                                      onInput={(e) => { setIdTyped(true); put({ id: e.currentTarget.value }); }} /></label>
-                    : <div class="safety-fixed"><span>Id</span><span class="safety-fixed-val mono">{p.id}</span></div>}
-                {isNew
-                    ? <label>Class
-                          <select value={p.class} onChange={(e) => put({ class: e.currentTarget.value, role: "" })}>
-                              {CLASSES.map((c) => <option key={c} value={c}>{classLabel(c)}</option>)}
-                          </select>
-                      </label>
-                    : <div class="safety-fixed"><span>Class</span><span class="safety-fixed-val"><ClassIcon cls={p.class} />{classLabel(p.class)}</span></div>}
-                <label>Keypad button
-                    <select value={intrusion ? p.role || "" : ""} disabled={!intrusion} onChange={(e) => put({ role: e.currentTarget.value })}>
-                        {ROLES.map((r) => <option key={r} value={r}>{r || "none"}</option>)}
-                    </select>
-                </label>
-            </div>
-            <p class="field-hint">The id and the class are fixed once the profile is saved: rules, MQTT and Home Assistant
-                refer to the id. A keypad button is for intrusion profiles only.</p>
-
-            <div class="safety-fields" style="margin-top: 10px">
-                <label>Arm delay, seconds<input type="number" min="0" max="300" value={p.arm_delay} onInput={num("arm_delay")} /></label>
-                <label>Trigger delay, seconds<input type="number" min="0" max="300" value={p.trigger_delay} onInput={num("trigger_delay")} /></label>
-                <label>Alarm time, seconds<input type="number" min="10" max="1800" value={p.siren_time} onInput={num("siren_time")} /></label>
-            </div>
-            <p class="field-hint">The arm delay is the time before the profile is armed. The trigger delay is the time to
-                disarm after a delayed sensor goes off. When the alarm time ends the outputs stop and the profile stays armed.</p>
-
-            <p style="margin-top: 14px"><Check label="Notify when it is armed or disarmed" checked={p.notify_arm} onChange={(v) => put({ notify_arm: v })} /></p>
-            <p class="field-hint">An alarm always notifies: a push to the ZHAC app when the hub is linked to ZHAC Cloud, and
-                a Telegram message when the hub's bot is set up.</p>
-
-            <h4>Sensors</h4>
-            {list("sensors").map((s, i) => (
-                <div key={s.ieee} class="alarm-row">
-                    <span class="alarm-name">{nameOf(s.ieee)}</span>
-                    <Check label="delayed" checked={s.entry} onChange={(v) => editRow("sensors", i, { entry: v })} />
-                    <button class="danger small" onClick={() => drop("sensors", i)}>Remove</button>
+            {/* While a save is out its fields are off: what is typed then would be lost with the editor that closes on success. */}
+            <fieldset class="safety-set" disabled={busy}>
+                <div class="safety-fields">
+                    <label>Name<input ref={first} type="text" value={p.name}
+                                      onInput={(e) => { const name = e.currentTarget.value; put(isNew && !idTyped ? { name, id: proposeId(name, profiles) } : { name }); }} /></label>
+                    {isNew
+                        ? <label>Id<input type="text" class="mono" value={p.id} spellcheck={false} autocomplete="off"
+                                          onInput={(e) => { setIdTyped(true); put({ id: e.currentTarget.value }); }} /></label>
+                        : <div class="safety-fixed"><span>Id</span><span class="safety-fixed-val mono">{p.id}</span></div>}
+                    {isNew
+                        ? <label>Class
+                              <select value={p.class} onChange={(e) => put({ class: e.currentTarget.value, role: "" })}>
+                                  {CLASSES.map((c) => <option key={c} value={c}>{classLabel(c)}</option>)}
+                              </select>
+                          </label>
+                        : <div class="safety-fixed"><span>Class</span><span class="safety-fixed-val"><ClassIcon cls={p.class} />{classLabel(p.class)}</span></div>}
+                    <label>Keypad button
+                        <select value={intrusion ? p.role || "" : ""} disabled={!intrusion} onChange={(e) => put({ role: e.currentTarget.value })}>
+                            {ROLES.map((r) => <option key={r} value={r}>{r || "none"}</option>)}
+                        </select>
+                    </label>
                 </div>
-            ))}
-            {list("sensors").length === 0 && <p class="empty-text">No sensors yet.</p>}
-            <AddPicker label="Add a sensor" list={sensorChoices} onPick={(d) => add("sensors", { ieee: d.ieee, entry: false })} />
-            <p class="field-hint">A delayed sensor starts the trigger delay, which gives time to disarm (a front door); any
-                other sets the alarm off at once. An open door or window stops arming. A leak, smoke or gas sensor that is
-                still active sets the alarm off once the profile is armed.</p>
+                <p class="field-hint">The id and the class are fixed once the profile is saved: rules, MQTT and Home Assistant
+                    refer to the id. A keypad button is for intrusion profiles only.</p>
 
-            <h4>Outputs</h4>
-            {list("outputs").map((o, i) => {
-                const ex = exposesOf(o.ieee);
-                const tone = ex.find((e) => e.name === "melody") || ex.find((e) => e.name === "ringtone");
-                const vol = ex.find((e) => e.name === "volume");
-                return (
-                    <div key={o.ieee} class="alarm-row">
-                        <span class="alarm-name">{nameOf(o.ieee)}</span>
-                        <Pick label="Signal" value={o.kind} values={["warning", "alarm", "state"]}
-                              onChange={(k) => setRow("outputs", i, newOutput(o.ieee, k, p.class))} />
-                        {o.kind === "warning" && <>
-                            <Pick label="Mode" value={o.mode} values={WD_MODES} onChange={(v) => editRow("outputs", i, { mode: v })} />
-                            <Pick label="Level" value={o.level} values={WD_LEVELS} onChange={(v) => editRow("outputs", i, { level: v })} />
-                            <Check label="strobe" checked={o.strobe} onChange={(v) => editRow("outputs", i, { strobe: v })} />
-                        </>}
-                        {o.kind === "alarm" && tone && <Tone label="Melody" expose={tone} value={o.melody} onChange={(v) => editRow("outputs", i, { melody: v })} />}
-                        {o.kind === "alarm" && vol && <Tone label="Volume" expose={vol} value={o.volume} onChange={(v) => editRow("outputs", i, { volume: v })} />}
-                        {o.kind === "state" && <>
-                            <Pick label="Set to" value={o.value} values={["on", "off"]} onChange={(v) => setRow("outputs", i, withValue(o, v))} />
-                            <Check label="leave it so" checked={o.keep} onChange={(v) => editRow("outputs", i, { keep: v })} />
-                        </>}
-                        <button class="danger small" onClick={() => drop("outputs", i)}>Remove</button>
+                <div class="safety-fields" style="margin-top: 10px">
+                    <label>Arm delay, seconds<input type="number" min="0" max="300" value={p.arm_delay} onInput={num("arm_delay")} /></label>
+                    <label>Trigger delay, seconds<input type="number" min="0" max="300" value={p.trigger_delay} onInput={num("trigger_delay")} /></label>
+                    <label>Alarm time, seconds<input type="number" min="10" max="1800" value={p.siren_time} onInput={num("siren_time")} /></label>
+                </div>
+                <p class="field-hint">The arm delay is the time before the profile is armed. The trigger delay is the time to
+                    disarm after a delayed sensor goes off. When the alarm time ends the outputs stop and the profile stays armed.</p>
+
+                <p style="margin-top: 14px"><Check label="Notify when it is armed or disarmed" checked={p.notify_arm} onChange={(v) => put({ notify_arm: v })} /></p>
+                <p class="field-hint">An alarm always notifies: a push to the ZHAC app when the hub is linked to ZHAC Cloud, and
+                    a Telegram message when the hub's bot is set up.</p>
+
+                <h4>Sensors</h4>
+                {list("sensors").map((s, i) => (
+                    <div key={s.ieee} class="alarm-row">
+                        <span class="alarm-name">{nameOf(s.ieee)}</span>
+                        <Check label="delayed" checked={s.entry} onChange={(v) => editRow("sensors", i, { entry: v })} />
+                        <button class="danger small" onClick={() => drop("sensors", i)}>Remove</button>
                     </div>
-                );
-            })}
-            {list("outputs").length === 0 && <p class="empty-text">No outputs yet.</p>}
-            <AddPicker label="Add an output" list={unused("outputs", (ex) => outputKind(ex) !== "")}
-                       onPick={(d) => add("outputs", newOutput(d.ieee, outputKind(exposesOf(d.ieee)), p.class))} />
-            <p class="field-hint">Signal <code>warning</code>: a Zigbee (IAS) siren, with its mode, level and strobe.
-                <code> alarm</code>: a Tuya siren, with its melody and volume. <code>state</code>: a switch, a plug or a
-                valve, set on or off. The outputs act in this order for the alarm time, and stop when it ends or on
-                disarm. One that is left so is set once and never switched back: a valve closed by a leak stays closed
-                until you open it.</p>
+                ))}
+                {list("sensors").length === 0 && <p class="empty-text">No sensors yet.</p>}
+                <AddPicker label="Add a sensor" list={sensorChoices} onPick={(d) => add("sensors", { ieee: d.ieee, entry: false })} />
+                <p class="field-hint">A delayed sensor starts the trigger delay, which gives time to disarm (a front door); any
+                    other sets the alarm off at once. An open door or window stops arming. A leak, smoke or gas sensor that is
+                    still active sets the alarm off once the profile is armed.</p>
+
+                <h4>Outputs</h4>
+                {list("outputs").map((o, i) => {
+                    const ex = exposesOf(o.ieee);
+                    const tone = ex.find((e) => e.name === "melody") || ex.find((e) => e.name === "ringtone");
+                    const vol = ex.find((e) => e.name === "volume");
+                    return (
+                        <div key={o.ieee} class="alarm-row">
+                            <span class="alarm-name">{nameOf(o.ieee)}</span>
+                            <Pick label="Signal" value={o.kind} values={["warning", "alarm", "state"]}
+                                  onChange={(k) => setRow("outputs", i, newOutput(o.ieee, k, p.class))} />
+                            {o.kind === "warning" && <>
+                                <Pick label="Mode" value={o.mode} values={WD_MODES} onChange={(v) => editRow("outputs", i, { mode: v })} />
+                                <Pick label="Level" value={o.level} values={WD_LEVELS} onChange={(v) => editRow("outputs", i, { level: v })} />
+                                <Check label="strobe" checked={o.strobe} onChange={(v) => editRow("outputs", i, { strobe: v })} />
+                            </>}
+                            {o.kind === "alarm" && tone && <Tone label="Melody" expose={tone} value={o.melody} onChange={(v) => editRow("outputs", i, { melody: v })} />}
+                            {o.kind === "alarm" && vol && <Tone label="Volume" expose={vol} value={o.volume} onChange={(v) => editRow("outputs", i, { volume: v })} />}
+                            {o.kind === "state" && <>
+                                <Pick label="Set to" value={o.value} values={["on", "off"]} onChange={(v) => setRow("outputs", i, withValue(o, v))} />
+                                <Check label="leave it so" checked={o.keep} onChange={(v) => editRow("outputs", i, { keep: v })} />
+                            </>}
+                            <button class="danger small" onClick={() => drop("outputs", i)}>Remove</button>
+                        </div>
+                    );
+                })}
+                {list("outputs").length === 0 && <p class="empty-text">No outputs yet.</p>}
+                <AddPicker label="Add an output" list={unused("outputs", (ex) => outputKind(ex) !== "")}
+                           onPick={(d) => add("outputs", newOutput(d.ieee, outputKind(exposesOf(d.ieee)), p.class))} />
+                <p class="field-hint">Signal <code>warning</code>: a Zigbee (IAS) siren, with its mode, level and strobe.
+                    <code> alarm</code>: a Tuya siren, with its melody and volume. <code>state</code>: a switch, a plug or a
+                    valve, set on or off. The outputs act in this order for the alarm time, and stop when it ends or on
+                    disarm. One that is left so is set once and never switched back: a valve closed by a leak stays closed
+                    until you open it.</p>
+            </fieldset>
 
             {err && <p class="error-text" role="alert">{err}</p>}
             {off && <p class="field-hint">{SAVE_OFF}</p>}
@@ -427,6 +437,7 @@ function KeypadsCard({ cfg, st, saved }) {
     const edit = (i, patch) => setPads(list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
     const n = cfg.codes_count || 0;
     const off = running(st);
+    useLayoutEffect(() => setErr(""), [pads, codes]);   // an edit answers the refusal; a refusal itself changes neither
 
     async function save() {
         setBusy(true); setErr("");
@@ -487,7 +498,7 @@ function KeypadsCard({ cfg, st, saved }) {
 
 function ShortcutsCard({ profiles }) {
     // The Alarm device by its current name (or its address), as the rules must name it.
-    const alarm = ruleRef(rowOf(ALARM_IEEE) || { ieee: ALARM_IEEE });
+    const alarm = ruleRef(rowOf(ALARM_IEEE) || { ieee: ALARM_IEEE }, devices.value);
     return (
         <Card title="Rule shortcuts" className="alarm-card">
             <p class="field-hint">Each makes an ordinary rule: change or delete it on the Rules page.</p>
@@ -534,7 +545,7 @@ function ReactionForm({ alarm, profiles }) {
     const keys = settable(exposesOf(f.ieee));
     const expose = keys.find((e) => e.name === f.key);
     const dev = rowOf(f.ieee);
-    const rule = dev && reactionRule({ alarm, profile, state: f.state, device: ruleRef(dev), key: f.key, value: f.value.trim() });
+    const rule = dev && reactionRule({ alarm, profile, state: f.state, device: ruleRef(dev, devices.value), key: f.key, value: f.value.trim() });
     return (
         <>
             <h4>Add a reaction</h4>
@@ -577,7 +588,7 @@ function ButtonForm({ alarm, profiles }) {
     const buttons = others().filter((d) => exposesOf(d.ieee).some((e) => e.name === "action"));
     const actionExpose = exposesOf(f.ieee).find((e) => e.name === "action");
     const dev = rowOf(f.ieee);
-    const rule = dev && buttonRule({ button: ruleRef(dev), action: f.action.trim(), alarm, profile, target });
+    const rule = dev && buttonRule({ button: ruleRef(dev, devices.value), action: f.action.trim(), alarm, profile, target });
     return (
         <>
             <h4>Arm with a button</h4>

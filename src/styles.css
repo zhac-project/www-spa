@@ -1260,6 +1260,7 @@ details.card > summary + * { margin-top: 12px; }
 .safety-card > .btn-strip { margin-top: auto; padding-top: 4px; }
 .safety-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
 .safety-editor { margin-bottom: 16px; scroll-margin-top: 64px; }   /* its title clear of the sticky 48 px header */
+.safety-set { min-width: 0; margin: 0; padding: 0; border: 0; }   /* a fieldset only to switch its fields off together */
 .safety-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0 16px; }
 .safety-fixed { margin: 6px 0; font-size: var(--text-sm); }
 .safety-fixed-val { display: flex; align-items: center; gap: 6px; padding: 8px 0; font-size: var(--text-base); }

@@ -179,18 +179,19 @@ test("codes are write-only: sent only to replace them, and an empty list clears 
 
 test("a rule names a device by its name when the DSL reads it back as that device, else by its address", () => {
     const ieee = "0x00158D0007A1B2C3";
-    assert.equal(ruleRef({ ieee: ALARM_IEEE, name: "Alarm" }), "Alarm");
-    assert.equal(ruleRef({ ieee, name: "front_door" }), "front_door");
-    assert.equal(ruleRef({ ieee, name: "Вхідні_двері" }), "Вхідні_двері");
-    assert.equal(ruleRef({ ieee, name: "front door" }), ieee, "an action's device is one word");
-    assert.equal(ruleRef({ ieee, name: "Hub I/O" }), ieee);
-    assert.equal(ruleRef({ ieee, name: "0xdoor" }), ieee, "0x… reads as an address");
-    assert.equal(ruleRef({ ieee, name: "a;b" }), ieee);
-    assert.equal(ruleRef({ ieee, name: "door#1" }), ieee);
-    assert.equal(ruleRef({ ieee, name: "Event" }), ieee, "ON Event#… is the named-event trigger");
-    assert.equal(ruleRef({ ieee, name: "" }), ieee);
-    assert.equal(ruleRef({ ieee, friendly: "hall" }), "hall");
-    assert.equal(ruleRef({ ieee: ALARM_IEEE }), ALARM_IEEE, "the Alarm device not listed yet: its address");
+    const ref = (dev) => ruleRef(dev, [dev]);   // the list the hub gives: this device, no other of the name
+    assert.equal(ref({ ieee: ALARM_IEEE, name: "Alarm" }), "Alarm");
+    assert.equal(ref({ ieee, name: "front_door" }), "front_door");
+    assert.equal(ref({ ieee, name: "Вхідні_двері" }), "Вхідні_двері");
+    assert.equal(ref({ ieee, name: "front door" }), ieee, "an action's device is one word");
+    assert.equal(ref({ ieee, name: "Hub I/O" }), ieee);
+    assert.equal(ref({ ieee, name: "0xdoor" }), ieee, "0x… reads as an address");
+    assert.equal(ref({ ieee, name: "a;b" }), ieee);
+    assert.equal(ref({ ieee, name: "door#1" }), ieee);
+    assert.equal(ref({ ieee, name: "Event" }), ieee, "ON Event#… is the named-event trigger");
+    assert.equal(ref({ ieee, name: "" }), ieee);
+    assert.equal(ref({ ieee, friendly: "hall" }), "hall");
+    assert.equal(ref({ ieee: ALARM_IEEE }), ALARM_IEEE, "the Alarm device not listed yet: its address");
 });
 
 test("value suggestions come from the key's expose", () => {
@@ -239,8 +240,9 @@ test("a rule names a device by its name only when no other device has that name"
     assert.equal(ruleRef(d, [c, d]), d.ieee);
     assert.equal(ruleRef(c, [c, { ...c, ieee: c.ieee.toLowerCase() }]), "door", "the same device twice in the list is one device");
     assert.equal(ruleRef(a, [{ ...a, name: "Lamp" }]), "lamp", "names are exact, as the hub compares them");
-    assert.equal(ruleRef(a), "lamp", "no list: the name alone");
-    assert.equal(ruleRef(a, null), "lamp");
+    assert.equal(ruleRef(a), a.ieee, "no list: the address, which never names another device");
+    assert.equal(ruleRef(a, null), a.ieee);
+    assert.equal(ruleRef({ ieee: ALARM_IEEE }), ALARM_IEEE);
     assert.equal(ruleRef({ ieee: ALARM_IEEE }, all), ALARM_IEEE, "the Alarm device not listed: its address");
 });
 
@@ -275,7 +277,8 @@ test("a generated rule name fits the hub's 23 bytes without being cut and differ
     for (const [what, name] of names) assert.ok(Buffer.byteLength(name) <= 23, `${what}: ${name} is ${Buffer.byteLength(name)} bytes`);
     const reaction = names.filter(([w]) => STATES.some((s) => w.endsWith(`/${s}`))).map(([, n]) => n);
     const button = names.filter(([w]) => /\/(armed|disarmed)$/.test(w) || w === "all").map(([, n]) => n);
-    // `armed`/`disarmed` are both a state and a button target: tell the two kinds apart by what made them.
+    // `armed` and `disarmed` are both a state and a button target, so the two sets share those labels: a reaction's
+    // name and a button's differ as well.
     for (const kind of [reaction, button]) assert.equal(new Set(kind).size, kind.length, "no two names alike");
     // Short ids keep the whole name: the Rules list reads better with the kind of rule in front.
     assert.equal(reactionRule({ alarm: "Alarm", profile: "flood", state: "triggered", device: "x", key: "state", value: "1" }).name, "Alarm flood triggered");

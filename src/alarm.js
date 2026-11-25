@@ -130,14 +130,14 @@ export function configToSend(cfg, codes) {
 // A device as a rule names it: by name when the parser reads that name back as the device (one word,
 // as an action needs; not an address; not a system trigger such as Event#) and no other device has the
 // name (the hub takes the first it finds), else by its address, which a trigger and an action both take.
-// `all`: the devices the hub lists.
+// `all`: the devices the hub lists. Without it the name cannot be known to be the only one: the address.
 const SYSTEM = new Set(["System", "Time", "Event", "Rules", "Mqtt", "Offline"]);
 const nameOf = (d) => (d && (d.name || d.friendly)) || "";
 const sameDevice = (a, b) => String(a.ieee).toLowerCase() === String(b.ieee).toLowerCase();
 export function ruleRef(dev, all) {
     const name = nameOf(dev);
     const plain = /^[^\s#;]+$/.test(name) && !/^0x/i.test(name) && !name.includes("ENDON") && !SYSTEM.has(name)
-        && !(all ?? []).some((d) => !sameDevice(d, dev) && nameOf(d) === name);
+        && Array.isArray(all) && !all.some((d) => !sameDevice(d, dev) && nameOf(d) === name);
     return plain ? name : dev ? dev.ieee : "";
 }
 
@@ -156,7 +156,8 @@ const word = (v) => typeof v === "string" && /^[^\s;"]+$/.test(v);
 // The hub cuts a rule's name at 23 bytes. A name that is longer drops its first word: the id and the state, or the
 // target, are what tell two rules apart. null when even that is too long (an id has 13 characters at most).
 const NAME_MAX = 23;
-const ruleName = (what, tail) => [`${what} ${tail}`, tail].find((n) => new TextEncoder().encode(n).length <= NAME_MAX) ?? null;
+const utf8 = new TextEncoder();
+const ruleName = (what, tail) => [`${what} ${tail}`, tail].find((n) => utf8.encode(n).length <= NAME_MAX) ?? null;
 
 export function reactionRule({ alarm, profile, state, device, key, value }) {
     if (![alarm, profile, state, device, key, value].every(word)) return null;

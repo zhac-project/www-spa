@@ -1176,10 +1176,10 @@ function RainMakerExposeControl({ ieee }) {
             <h4 style="margin-bottom:8px;font-size:var(--text-sm)">RainMaker</h4>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
                 <label class="toggle">
-                    <input type="checkbox" aria-label="Expose to RainMaker" checked={exposed} disabled={busy} onChange={onToggle} />
+                    <input type="checkbox" aria-labelledby="rainmaker-exposed" checked={exposed} disabled={busy} onChange={onToggle} />
                     <span class="toggle-slider"></span>
                 </label>
-                <span>{exposed ? "Exposed to RainMaker" : "Not exposed to RainMaker"}</span>
+                <span id="rainmaker-exposed">{exposed ? "Exposed to RainMaker" : "Not exposed to RainMaker"}</span>
                 {exposed && entry?.type && <span class="ro-tag">{entry.type}</span>}
             </div>
             <p class="tab-hint">

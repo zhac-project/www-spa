@@ -375,45 +375,75 @@ test("the Mute switch is named by its label", { skip, timeout: 40000 }, async ()
     assert.equal(nodes[0]?.name?.value, "Mute", "what a screen reader says for the switch");
 });
 
-// ── Settings › Sound: the slider saves once its keys stop, and an older answer never moves it back ──
+// ── Settings › Sound: the slider saves once it is let go, and no answer moves it off a newer value ──
 const VOL = `${SOUND_CARD}.querySelector("#sound-volume")`;
 async function openSound() {
     await send("Page.navigate", { url: `${base}/?load=${++loads}#/settings` }, session);
     await until(`${SOUND_CARD}?.querySelector("#sound-volume")`, "the Sound card");
 }
-// Each PUT to /api/sound the page sends goes to window.__puts as its volume. With `hold`, the hub's answer to the
-// first one waits for window.__release(), which resolves once the page has had it.
-const watchPuts = (hold) => ev(`(() => {
-    const real = window.fetch, puts = window.__puts = [];
-    let held = ${hold};
-    window.fetch = (url, init) => {
-        if (url !== "/api/sound" || init?.method !== "PUT") return real(url, init);
-        puts.push(JSON.parse(init.body).volume);
-        const answer = real(url, init);
-        if (!held) return answer;
-        held = false;
-        return new Promise((give) => {
-            window.__release = () => { give(answer); return answer.then(() => new Promise((r) => setTimeout(r, 200))); };
+// The page's calls to /api/sound, answered as `plan` says. Each PUT's body goes to window.__puts, and the hub does
+// what plan[i] says with the i-th PUT: "pass" (the default), "hold" (the answer waits for window.__release()) or
+// "refuse" (400 "volume refused"). window.__read counts the PUT answers the page has read and dealt with (a timer runs
+// after the page's own promise steps and its render), and window.__release() resolves once the held one is. With
+// window.__down set every call fails, as with the hub gone; window.__failed counts those, once dealt with.
+const watchSound = (plan = []) => ev(`(() => {
+    const real = window.fetch, puts = window.__puts = [], plan = ${JSON.stringify(plan)};
+    window.__read = 0; window.__down = false; window.__failed = 0;
+    const counted = (answer) => answer.then((r) => {
+        const json = r.json.bind(r);
+        r.dealt = new Promise((done) => {
+            r.json = () => json().finally(() => setTimeout(() => { window.__read++; done(); }, 0));
         });
+        return r;
+    });
+    window.fetch = (url, init) => {
+        if (url !== "/api/sound") return real(url, init);
+        if (window.__down) {
+            setTimeout(() => window.__failed++, 0);
+            return Promise.reject(new TypeError("Failed to fetch"));
+        }
+        if (init?.method !== "PUT") return real(url, init);
+        const what = plan[puts.length] || "pass";
+        puts.push(JSON.parse(init.body));
+        if (what === "refuse") return counted(Promise.resolve(new Response('{"error":"volume refused"}', { status: 400 })));
+        const answer = counted(real(url, init));
+        if (what !== "hold") return answer;
+        return new Promise((give) => { window.__release = () => { give(answer); return answer.then((r) => r.dealt); }; });
     };
 })()`);
 const saved = `document.querySelector(".toast")?.textContent === "Volume saved"`;
+const UP = { key: "ArrowUp", code: "ArrowUp", windowsVirtualKeyCode: KEYS.ArrowUp };
+const upDown = (repeat = false) => send("Input.dispatchKeyEvent", { type: "rawKeyDown", autoRepeat: repeat, ...UP }, session);
+const upUp = () => send("Input.dispatchKeyEvent", { type: "keyUp", ...UP }, session);
 
-test("holding an arrow key on the volume slider saves once, after the keys stop", { skip, timeout: 40000 }, async () => {
+test("quick arrow-key steps on the volume slider save once, after the keys stop", { skip, timeout: 40000 }, async () => {
     await openSound();
     const start = await ev(`Number(${VOL}.value)`);
-    await watchPuts(false);
+    await watchSound();
     await ev(`${VOL}.focus()`);
     for (let i = 0; i < 5; i++) await key("ArrowUp");
     await until(saved, "the save's toast");
-    assert.deepEqual(await ev("window.__puts"), [start + 5], "one save, of where the keys stopped");
+    assert.deepEqual(await ev("window.__puts"), [{ volume: start + 5 }], "one save, of where the keys stopped");
     assert.equal(await ev(`Number(${VOL}.value)`), start + 5);
+});
+
+test("holding an arrow key on the volume slider saves once, after it is let go", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`);
+    await watchSound();
+    await ev(`${VOL}.focus()`);
+    await upDown();
+    await sleep(450);   // a keyboard's pause before it repeats, longer than the save's wait
+    for (let i = 0; i < 4; i++) await upDown(true);
+    await upUp();
+    await until(saved, "the save's toast");
+    assert.deepEqual(await ev("window.__puts"), [{ volume: start + 5 }], "one save, after the key is let go");
 });
 
 test("a late answer to an older volume save does not move the slider back", { skip, timeout: 40000 }, async () => {
     await openSound();
     const start = await ev(`Number(${VOL}.value)`);
-    await watchPuts(true);   // the hub's answer to the first save is held back
+    await watchSound(["hold"]);
     await ev(`${VOL}.focus()`);
     await key("ArrowUp");
     await until("window.__puts.length === 1", "the first save");
@@ -421,4 +451,70 @@ test("a late answer to an older volume save does not move the slider back", { sk
     await until(saved, "the second save's answer");
     await ev("window.__release()");   // now the first save's answer arrives; it says start + 1
     assert.equal(await ev(`Number(${VOL}.value)`), start + 2, "the slider stays where the newer save put it");
+});
+
+test("an answer that comes during a drag leaves the slider under the pointer", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`);
+    await watchSound(["hold"]);
+    await ev(`${VOL}.focus()`);
+    await key("ArrowUp");
+    await until("window.__puts.length === 1", "the save of start + 1");
+    await ev(`(() => { const e = ${VOL}; e.value = ${start + 9}; e.dispatchEvent(new Event("input", { bubbles: true })); })()`);   // dragged, not let go
+    await ev("window.__release()");
+    assert.equal(await ev(`Number(${VOL}.value)`), start + 9, "the slider is where the drag is");
+});
+
+test("a Mute answer leaves a volume that waits to be saved alone", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`), was = await ev(`${mute}.checked`);
+    await watchSound();
+    await ev(`${VOL}.focus()`);
+    await upDown();                   // start + 1, held: its save waits
+    await ev(`${mute}.click()`);      // the keys stay on the slider
+    await until("window.__read === 1", "the hub's answer to Mute");
+    await upDown(true);               // start + 2
+    await upUp();
+    await until(saved, "the volume's save");
+    assert.deepEqual(await ev("window.__puts"), [{ muted: !was }, { volume: start + 2 }], "the step after Mute counts from start + 1");
+});
+
+test("a volume that waits to be saved is sent when the card goes away", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`);
+    await watchSound();
+    await ev(`${VOL}.focus()`);
+    await key("ArrowUp");
+    await ev(`location.hash = "#/info"`);
+    await until(`!${SOUND_CARD}`, "Settings to close");
+    await ev(`location.hash = "#/settings"`);
+    await until(`${SOUND_CARD}?.querySelector("#sound-volume")`, "the Sound card again");
+    await until(`Number(${VOL}.value) === ${start + 1}`, "the new card to show the volume the old one saved", 2000);
+});
+
+test("an older save's late success does not hide the newer one's refusal", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    await watchSound(["hold", "refuse"]);
+    await ev(`${VOL}.focus()`);
+    await key("ArrowUp");
+    await until("window.__puts.length === 1", "the first save");
+    await key("ArrowUp");
+    await until(Q(".toast-err"), "the refusal's toast");
+    await ev("window.__release()");   // the first save's success arrives last
+    assert.equal(await ev(`${Q(".toast")}?.className`), "toast toast-err", "the refusal stays on screen");
+    assert.equal(await text(".toast"), "Failed: volume refused");
+});
+
+test("a failed save with the hub gone keeps the Mute the hub took", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const was = await ev(`${mute}.checked`);
+    await watchSound();
+    await ev(`${VOL}.focus()`);
+    await upDown();                   // a volume that waits to be saved, from before Mute
+    await ev(`${mute}.click()`);
+    await until("window.__read === 1", "the hub's answer to Mute");
+    await ev("window.__down = true");
+    await upUp();                     // the volume's save now goes out and fails, and so does the reload
+    await until("window.__failed === 2", "the failed save and the failed reload");
+    assert.equal(await ev(`${mute}.checked`), !was, "the switch shows the Mute the hub confirmed");
 });

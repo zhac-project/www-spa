@@ -116,7 +116,8 @@ after(async () => {
     try { cdp?.close(); } catch { /* gone already */ }
     const gone = (child) => child && child.exitCode === null && new Promise((r) => { child.once("exit", r); child.kill(); });
     await Promise.all([gone(chrome), gone(demo), vite?.close()]);   // Chrome writes to its profile until it is gone
-    if (profileDir) rmSync(profileDir, { recursive: true, force: true });
+    // Its helper processes can write there a little longer: a removal that meets a new file (ENOTEMPTY) retries.
+    if (profileDir) rmSync(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 // ── what a test does in the page ───────────────────────────────────────────
@@ -270,6 +271,7 @@ test("the editor's refusal clears as soon as the user edits again", { skip, time
 test("the keypads card's refusal clears as soon as the user edits again", { skip, timeout: 40000 }, async () => {
     await open();
     const card = `[...document.querySelectorAll(".card")].find((c) => c.textContent.includes("Keypads and codes"))`;
+    await until(`${card}?.querySelector(".btn-strip button")`, "the keypads card");   // open() waits for the profiles only
     await clickEl(`${card}.querySelector(".btn-strip button")`);   // Replace the codes…
     await until(`${card}.querySelector("input.alarm-code")`, "a code field");
     await ev(`window.__hook.refuse = "codes: nope"`);

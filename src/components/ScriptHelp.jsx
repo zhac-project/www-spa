@@ -53,7 +53,7 @@ zhac.ws_write(pin, colors)      → true | nil, err    -- strip pin; {0xRRGGBB, 
 
             <h4>Sound (<code>zhac.*</code>, Settings › Sound)</h4>
             <pre class="dsl-snippet">{`zhac.sound_play(name [, volume [, loop]]) → true | nil, err  -- a built-in sound; volume 0-100, max 70
-zhac.sound_tone(hz, ms [, volume])        → true | nil, err  -- one tone; hz 100-8000, ms 1-10000
+zhac.sound_tone(hz, ms [, volume])        → true | nil, err  -- one tone; hz 100-7900, ms 1-10000
 zhac.sound_melody(notes [, volume])       → true | nil, err  -- up to 32 notes {{hz, ms}, ...}; hz 0 = rest
 zhac.sound_stop([name])                   → true             -- stop; with a name, only that sound
 zhac.sound_volume([v])                    → volume | nil, err -- the default volume; v 0-100 sets it

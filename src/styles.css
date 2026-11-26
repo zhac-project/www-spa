@@ -557,7 +557,8 @@ button.small {
     height: 21px;
     flex-shrink: 0;
 }
-.toggle input { display: none; }
+/* Unseen but still in the page: with display: none the checkbox could neither take focus nor be read out. */
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
 .toggle-slider {
     position: absolute;
     cursor: pointer;
@@ -578,6 +579,7 @@ button.small {
 }
 .toggle input:checked + .toggle-slider         { background: var(--blue); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(17px); }
+.toggle input:focus-visible + .toggle-slider   { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* ── Permit-join strip ─────────────────────────────────────────────── */
 .permit-join-wrap {

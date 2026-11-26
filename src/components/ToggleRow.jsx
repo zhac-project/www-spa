@@ -5,7 +5,7 @@ export function ToggleRow({ label, checked, onChange, disabled = false, style = 
     return (
         <div style={`display:flex;align-items:center;gap:10px;margin-bottom:8px${disabled ? ";opacity:.55" : ""}${style}`}>
             <label class="toggle">
-                <input type="checkbox" checked={checked} disabled={disabled}
+                <input type="checkbox" aria-label={label} checked={checked} disabled={disabled}
                        onChange={(e) => onChange(e.currentTarget.checked)} />
                 <span class="toggle-slider" />
             </label>

@@ -363,6 +363,62 @@ test("a refused Mute save puts the switch back to what the hub holds", { skip, t
     await clickEl(`${SOUND_CARD}.querySelector(".toggle-slider")`);
     await until(`${Q(".toast-err")}`, "the refusal's toast");
     assert.equal(await text(".toast-err"), "Failed: muted must be true or false");
-    await sleep(300);   // the card reloads the hub's state
-    assert.equal(await ev(`${mute}.checked`), false, "the switch shows what the hub holds, not the click");
+    await until(`!${mute}.checked`, "the switch to show what the hub holds, not the click");   // the card reloads it
+});
+
+test("the Mute switch is named by its label", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    assert.equal(await ev(`(${mute}.focus(), document.activeElement === ${mute})`), true, "the switch takes keyboard focus");
+    await send("Accessibility.enable", {}, session);
+    const { result } = await send("Runtime.evaluate", { expression: mute }, session);
+    const { nodes } = await send("Accessibility.getPartialAXTree", { objectId: result.objectId, fetchRelatives: false }, session);
+    assert.equal(nodes[0]?.name?.value, "Mute", "what a screen reader says for the switch");
+});
+
+// ── Settings › Sound: the slider saves once its keys stop, and an older answer never moves it back ──
+const VOL = `${SOUND_CARD}.querySelector("#sound-volume")`;
+async function openSound() {
+    await send("Page.navigate", { url: `${base}/?load=${++loads}#/settings` }, session);
+    await until(`${SOUND_CARD}?.querySelector("#sound-volume")`, "the Sound card");
+}
+// Each PUT to /api/sound the page sends goes to window.__puts as its volume. With `hold`, the hub's answer to the
+// first one waits for window.__release(), which resolves once the page has had it.
+const watchPuts = (hold) => ev(`(() => {
+    const real = window.fetch, puts = window.__puts = [];
+    let held = ${hold};
+    window.fetch = (url, init) => {
+        if (url !== "/api/sound" || init?.method !== "PUT") return real(url, init);
+        puts.push(JSON.parse(init.body).volume);
+        const answer = real(url, init);
+        if (!held) return answer;
+        held = false;
+        return new Promise((give) => {
+            window.__release = () => { give(answer); return answer.then(() => new Promise((r) => setTimeout(r, 200))); };
+        });
+    };
+})()`);
+const saved = `document.querySelector(".toast")?.textContent === "Volume saved"`;
+
+test("holding an arrow key on the volume slider saves once, after the keys stop", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`);
+    await watchPuts(false);
+    await ev(`${VOL}.focus()`);
+    for (let i = 0; i < 5; i++) await key("ArrowUp");
+    await until(saved, "the save's toast");
+    assert.deepEqual(await ev("window.__puts"), [start + 5], "one save, of where the keys stopped");
+    assert.equal(await ev(`Number(${VOL}.value)`), start + 5);
+});
+
+test("a late answer to an older volume save does not move the slider back", { skip, timeout: 40000 }, async () => {
+    await openSound();
+    const start = await ev(`Number(${VOL}.value)`);
+    await watchPuts(true);   // the hub's answer to the first save is held back
+    await ev(`${VOL}.focus()`);
+    await key("ArrowUp");
+    await until("window.__puts.length === 1", "the first save");
+    await key("ArrowUp");
+    await until(saved, "the second save's answer");
+    await ev("window.__release()");   // now the first save's answer arrives; it says start + 1
+    assert.equal(await ev(`Number(${VOL}.value)`), start + 2, "the slider stays where the newer save put it");
 });

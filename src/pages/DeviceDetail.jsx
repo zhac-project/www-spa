@@ -593,7 +593,7 @@ function AttrBoolRow({ ieee, k, v }) {
             <td><code class="mono">{k}</code></td>
             <td>
                 <label class="toggle">
-                    <input type="checkbox" checked={shown} onChange={toggle} disabled={busy} />
+                    <input type="checkbox" aria-label={k} checked={shown} onChange={toggle} disabled={busy} />
                     <span class="toggle-slider"></span>
                 </label>
             </td>
@@ -1176,7 +1176,7 @@ function RainMakerExposeControl({ ieee }) {
             <h4 style="margin-bottom:8px;font-size:var(--text-sm)">RainMaker</h4>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
                 <label class="toggle">
-                    <input type="checkbox" checked={exposed} disabled={busy} onChange={onToggle} />
+                    <input type="checkbox" aria-label="Expose to RainMaker" checked={exposed} disabled={busy} onChange={onToggle} />
                     <span class="toggle-slider"></span>
                 </label>
                 <span>{exposed ? "Exposed to RainMaker" : "Not exposed to RainMaker"}</span>

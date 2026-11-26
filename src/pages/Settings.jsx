@@ -242,7 +242,7 @@ export function SettingsPage() {
                 <Card title="MQTT">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
                         <label class="toggle">
-                            <input type="checkbox" checked={!!d.mqtt_enabled}
+                            <input type="checkbox" aria-label="Enable MQTT client" checked={!!d.mqtt_enabled}
                                    onChange={(e) => writeSettings({ mqtt_enabled: e.currentTarget.checked },
                                        e.currentTarget.checked ? "MQTT enabled (reboot required)" : "MQTT disabled (reboot required)")} />
                             <span class="toggle-slider" />
@@ -286,7 +286,7 @@ export function SettingsPage() {
                         <>
                             <div style="display:flex;align-items:center;gap:10px;margin:10px 0 6px">
                                 <label class="toggle">
-                                    <input type="checkbox" checked={!!d.ha_discovery}
+                                    <input type="checkbox" aria-label="Home Assistant discovery" checked={!!d.ha_discovery}
                                            onChange={(e) => writeSettings({ ha_discovery: e.currentTarget.checked },
                                                e.currentTarget.checked ? "Home Assistant discovery on" : "Home Assistant discovery off")} />
                                     <span class="toggle-slider" />

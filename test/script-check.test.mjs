@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // node --test -- review 2026-10-24 HS-12: the hub closes a WebSocket session on a frame over
 // 32 KB (8 KB before zhac-components 8583cb5), so the editor's syntax check sends a longer
 // source over REST instead of on the socket.

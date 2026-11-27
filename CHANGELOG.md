@@ -26,6 +26,7 @@ across the ZHAC platform.
 
 ### Changed
 
+- **`LICENSE` is the plain AGPL-3.0 text**, so GitHub shows the license. The copyright, the contribution terms and the third-party note moved to the new `NOTICE`. The test files under `test/` carry SPDX headers.
 - **IEEE addresses blurred** in the README's device list screenshot (`docs/screenshots/devices.png`). They were the demo hub's made-up addresses.
 - **The WebSocket client sends frames up to 32 KB** (`src/ws/frame.js`), as the hub takes them since zhac-components 8583cb5 (8 KB before): the largest Safety config is about 22 KB, and it must pass in one frame. The script editor's syntax check now sends a source of up to 32 KB on the socket; a longer one still goes over REST.
 - **README and ONBOARDING describe the one-board hub**: the SPA ships inside zhac-wired-core's app image (not a SPIFFS partition), the archived repos are named as such, the project link goes to zhac-docs, and the cache and WebSocket notes match the hub.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2025-2026 Evgenij Cjura and project contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { describeBackup, NOT_IN_BACKUP, BACKUP_FORMAT } from "../src/backup_preview.js";

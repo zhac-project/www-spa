@@ -145,7 +145,8 @@ nodes — there is no `dangerouslySetInnerHTML` anywhere in `src/`.
 
 ## License
 
-GNU AGPL v3 or later. See `LICENSE`.
+GNU AGPL v3 or later. The license text is in `LICENSE`; the copyright, the CLA and the
+third-party notes are in `NOTICE`.
 
 ## Contributing
 

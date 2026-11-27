@@ -494,6 +494,18 @@ button.small {
     letter-spacing: .5px;
     color: var(--muted);
 }
+/* Sortable header: a button that looks like the header text. */
+.data-table th button.th-sort {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+}
+.data-table th button.th-sort:hover:not(:disabled) { background: none; color: var(--text); }
 .data-table tbody tr:nth-child(odd)  { background: var(--row-a); }
 .data-table tbody tr:nth-child(even) { background: var(--row-b); }
 .data-table tbody tr:hover           { background: var(--row-hover); }

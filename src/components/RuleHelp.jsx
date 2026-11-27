@@ -35,7 +35,7 @@ ON Time#Cron=0 0 22 * * *  DO ... ENDON     // sec min hour mday mon wday
 ON Event#motion_detected DO ... ENDON
 ON Rules#Timer=1         DO ... ENDON     // index 1–8
 ON Mqtt#home/alarm       DO ... ENDON
-ON Offline#kitchen_plug  DO ... ENDON     // a mains device stopped answering its ping`}</pre>
+ON Offline#kitchen_plug  DO ... ENDON     // silent 1 h, ping unanswered (battery: 48 h)`}</pre>
 
             <h4>Actions</h4>
             <pre class="dsl-snippet">{`zigbee.set <device> <key> <value>      // set attribute by name

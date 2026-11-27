@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure merge behind the attr.bulk push (stores/devices.js). attr.bulk carries
 // an ARRAY of per-device entries `{ieee, lqi, last_seen, offline, attrs}`
-// (offline: the device let its availability ping go unanswered); several
+// (offline: the device was silent too long, see the hub's availability); several
 // entries for one IEEE may come in one batch and fold in order. Returns the
 // list unchanged when there is nothing to apply, else a new list in which only
 // the touched rows are new objects (refs to the others stay stable).

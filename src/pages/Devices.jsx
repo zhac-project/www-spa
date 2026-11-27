@@ -9,6 +9,7 @@ import { call } from "../ws/client.js";
 import { navigate, showToast, hrefFor } from "../stores/ui.js";
 import { fmtSince, hex16, isLocal } from "../utils.js";
 import { deviceMatchesFilter } from "../utils/deviceFilter.js";
+import { sortDevices, nextSort, parseSort } from "../utils/deviceSort.js";
 import { LINKS } from "../links.js";
 import { status } from "../stores/status.js";
 
@@ -262,12 +263,41 @@ function PermitJoinAdvanced() {
     );
 }
 
+// The chosen sort column + direction is remembered per browser; storage may
+// be blocked, then the page just starts unsorted every time.
+const SORT_KEY = "zhac_devices_sort";
+function loadSort() {
+    try { return parseSort(localStorage.getItem(SORT_KEY)); } catch { return null; }
+}
+function saveSort(s) {
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+// A column header that sorts the table: a button styled as the header text.
+function SortTh({ col, sort, onSort, class: cls, children }) {
+    const active = sort && sort.col === col;
+    return (
+        <th class={cls} aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+            <button type="button" class="th-sort" onClick={() => onSort(col)}>
+                {children}{active && <span class="th-sort-dir" aria-hidden="true">{sort.dir === "asc" ? " ▲" : " ▼"}</span>}
+            </button>
+        </th>
+    );
+}
+
 export function DevicesPage() {
     const [adding, setAdding] = useState(false);
     const [filterText, setFilterText] = useState("");
+    const [sort, setSort] = useState(loadSort);   // null = the hub's own order
     const list = devices.value;
     const filterActive = filterText.trim().length > 0;
     const filtered = filterActive ? list.filter((d) => deviceMatchesFilter(d, filterText)) : list;
+    const rows = sort ? sortDevices(filtered, sort.col, sort.dir) : filtered;
+    function onSort(col) {
+        const next = nextSort(sort, col);
+        setSort(next);
+        saveSort(next);
+    }
 
     // Inlined table so the '#' column can reflect the current order index.
     return (
@@ -317,18 +347,18 @@ export function DevicesPage() {
                     <thead>
                         <tr>
                             <th class="col-n">#</th>
-                            <th>Name</th>
+                            <SortTh col="name" sort={sort} onSort={onSort}>Name</SortTh>
                             <th>IEEE</th>
                             <th>NWK</th>
-                            <th class="col-manuf">Manufacturer</th>
-                            <th class="col-model">Model</th>
-                            <th class="col-lqi">LQI</th>
-                            <th class="col-seen">Last seen</th>
+                            <SortTh col="vendor" sort={sort} onSort={onSort} class="col-manuf">Manufacturer</SortTh>
+                            <SortTh col="model" sort={sort} onSort={onSort} class="col-model">Model</SortTh>
+                            <SortTh col="lqi" sort={sort} onSort={onSort} class="col-lqi">LQI</SortTh>
+                            <SortTh col="last_seen" sort={sort} onSort={onSort} class="col-seen">Last seen</SortTh>
                             <th class="col-act"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.map((d, i) => (
+                        {rows.map((d, i) => (
                             <tr key={d.ieee}>
                                 <td class="col-n">{i + 1}</td>
                                 <td>
@@ -347,7 +377,7 @@ export function DevicesPage() {
                                 <td class="col-manuf">{d.vendor || "—"}</td>
                                 <td class="col-model">{d.model || "—"}</td>
                                 <td class="col-lqi">{d.lqi != null ? d.lqi : "—"}</td>
-                                <td class="col-seen">{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Did not answer its availability ping">Offline</span></>}</td>
+                                <td class="col-seen">{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Not heard from for too long: an hour for a mains device, 48 hours for a battery one">Offline</span></>}</td>
                                 <td class="col-act">
                                     <div class="act-group">
                                         <button class="act-btn edit" title="Details" aria-label={`Details of ${d.name || d.ieee}`}

@@ -214,7 +214,7 @@ function InfoTab({ d, renameVal, setRenameVal, doRename }) {
                     <tr><th>Model</th><td>{d.model || "—"}</td></tr>
                     <tr><th>Power Source</th><td>{d.power_source || "—"}</td></tr>
                     <tr><th>LQI</th><td>{d.lqi != null ? d.lqi : "—"}</td></tr>
-                    <tr><th>Last seen</th><td>{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Did not answer its availability ping">Offline</span></>}</td></tr>
+                    <tr><th>Last seen</th><td>{fmtSince(d.last_seen)}{d.offline && <> <span class="badge badge-err" title="Not heard from for too long: an hour for a mains device, 48 hours for a battery one">Offline</span></>}</td></tr>
                     <tr><th>Converter</th><td>{d.vendor && d.model ? `${d.vendor}/${d.model}` : "none"}</td></tr>
                     {eps.map((epId, i) => (
                         <tr key={epId}>

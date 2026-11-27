@@ -17,6 +17,7 @@ import { Badge } from "../components/Badge.jsx";
 import { fmtSince } from "../utils.js";
 import { copyText } from "../utils/clipboard.js";
 import { LOG_LEVELS, levelToast, countersText } from "../logCloud.js";
+import { CLOUD_LEVELS, ALARM_HINT, levelPatch, alarmPatch, levelToast as cloudLevelToast } from "../cloudControl.js";
 import { cleartextCredentials, isTlsUrl, normalizePin, brokerPatch } from "../mqtt_url.js";
 import { createBackup, restoreBackup, describeBackup, downloadJson, NOT_IN_BACKUP,
          downloadFullBackup, restoreFullBackup, hubUptime } from "../stores/backup.js";
@@ -133,8 +134,10 @@ export function SettingsPage() {
     // Re-reads status afterwards: the toggles show what the hub now reports
     // (status.tick carries no settings), and the hub clock shows the new zone.
     async function writeSettings(patch, successMsg) {
+        // The re-read also follows a refusal: a select or switch the hub kept must go back to what it holds,
+        // above all the cloud level and the alarm switch (HL-02, HL-03), which the hub only raises once saved.
         try { await call("settings.set", patch); showToast(successMsg || "Saved", "ok"); }
-        catch (e) { showToast("Failed: " + e.message, "err"); return; }
+        catch (e) { showToast("Failed: " + e.message, "err"); }
         bootstrapStatus().catch(() => {});
     }
 
@@ -1228,6 +1231,28 @@ function RemoteCard({ d, write }) {
                 <button class="secondary small" onClick={doDisconnect}>Disconnect</button>
                 <button class="danger small" onClick={doForget}>Forget credentials</button>
             </div>
+            {d.remote_level !== undefined && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <label>Cloud control
+                        <select value={d.remote_level}
+                                onChange={(e) => write(levelPatch(e.currentTarget.value), cloudLevelToast(e.currentTarget.value))}>
+                            {CLOUD_LEVELS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                        </select>
+                    </label>
+                </>
+            )}
+            {d.remote_alarm !== undefined && (
+                <>
+                    <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+                    <ToggleRow label="Allow the cloud to disarm the alarm"
+                               checked={!!d.remote_alarm}
+                               style=";min-height:44px;margin-bottom:0"
+                               onChange={(v) => write(alarmPatch(v),
+                                   v ? "The cloud may disarm the alarm" : "The cloud may not disarm the alarm")} />
+                    <p class="field-hint" style="margin:0 0 4px;line-height:1.45">{ALARM_HINT}</p>
+                </>
+            )}
             {d.remote_scripts !== undefined && (
                 <>
                     <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
